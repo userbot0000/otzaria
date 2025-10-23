@@ -8,6 +8,7 @@ import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/html_link_handler.dart';
 
 class CommentaryContent extends StatefulWidget {
   const CommentaryContent({
@@ -39,6 +40,18 @@ class _CommentaryContentState extends State<CommentaryContent> {
   void initState() {
     super.initState();
     content = widget.link.content;
+  }
+
+  @override
+  void didUpdateWidget(CommentaryContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // עדכון תוכן הפירוש כאשר הקישור משתנה
+    // בודקים אם הקישור השתנה על ידי השוואת המאפיינים המזהים שלו
+    if (oldWidget.link.path2 != widget.link.path2 ||
+        oldWidget.link.index2 != widget.link.index2 ||
+        oldWidget.link.heRef != widget.link.heRef) {
+      content = widget.link.content;
+    }
   }
 
   int _countSearchMatches(String text, String searchQuery) {
@@ -89,14 +102,28 @@ class _CommentaryContentState extends State<CommentaryContent> {
 
               return BlocBuilder<SettingsBloc, SettingsState>(
                 builder: (context, settingsState) {
+                  // החלפת שמות קדושים אם נדרש
+                  String displayText = text;
+                  if (settingsState.replaceHolyNames) {
+                    displayText = utils.replaceHolyNames(displayText);
+                  }
+
                   return HtmlWidget(
-                    '<div style="text-align: justify; direction: rtl;">$text</div>',
+                    '<div style="text-align: justify; direction: rtl;">$displayText</div>',
                     textStyle: TextStyle(
                       fontSize: widget.fontSize / 1.2,
                       fontFamily: settingsState.fontFamily,
                     ),
+                    onTapUrl: (url) async {
+                      return await HtmlLinkHandler.handleLink(context, url, widget.openBookCallback);
+                    },
                   );
                 },
+              );
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Text('שגיאה בטעינת הפרשן: ${snapshot.error}'),
               );
             }
             return const Center(
