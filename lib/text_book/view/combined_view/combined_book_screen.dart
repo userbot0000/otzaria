@@ -47,55 +47,29 @@ class CombinedView extends StatefulWidget {
 class _CombinedViewState extends State<CombinedView> {
   final GlobalKey<SelectionAreaState> _selectionKey =
       GlobalKey<SelectionAreaState>();
+  bool _didInitialJump = false;
 
-  // שמירת reference ל-BLoC לשימוש ב-listeners
-  late final TextBookBloc _textBookBloc;
-
-  @override
-  void initState() {
-    super.initState();
-    // שמירת ה-BLoC מראש
-    _textBookBloc = context.read<TextBookBloc>();
-
-    // האזנה לשינויים במיקומי הפריטים כדי לאפס את הבחירה בגלילה
-    widget.tab.positionsListener.itemPositions.addListener(_onScroll);
-    // עדכון האינדקס ב-tab בזמן אמת
-    widget.tab.positionsListener.itemPositions.addListener(_updateTabIndex);
-  }
-
-  @override
-  void dispose() {
-    widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
-    widget.tab.positionsListener.itemPositions.removeListener(_updateTabIndex);
-    super.dispose();
-  }
-
-  // עדכון האינדקס הנוכחי ב-tab
-  void _updateTabIndex() {
-    final positions = widget.tab.positionsListener.itemPositions.value;
-    if (positions.isNotEmpty) {
-      // שומר את האינדקס של הפריט הראשון הנראה
-      widget.tab.index = positions.first.index;
-    }
-  }
-
-  // פונקציה שתשלח אירוע איפוס ל-selectedIndex אם יש גלילה משמעותית
-  void _onScroll() {
-    // אנחנו רוצים את הלוגיקה הזו רק בתצוגה המפוצלת (SimpleBookView לשעבר)
-    // שבה המפרשים מוצגים בפאנל צד (כלומר: לא ExpansionTiles)
-    if (widget.showCommentaryAsExpansionTiles) return;
-
-    final state = _textBookBloc.state;
-    if (state is! TextBookLoaded) return;
-
-    final currentSelectedIndex = state.selectedIndex;
-
-    if (currentSelectedIndex != null) {
-      // אם האינדקס הנבחר כבר לא נראה (האינדקסים הנראים שונו עקב גלילה)
-      final visibleIndices = state.visibleIndices;
-      if (!visibleIndices.contains(currentSelectedIndex)) {
-        _textBookBloc.add(const UpdateSelectedIndex(null));
+  void _jumpToInitialIndexWhenReady() {
+    int attempts = 0;
+    void tryJump(Duration _) {
+      if (!mounted) return;
+      final ctrl = widget.tab.scrollController;
+      if (ctrl.isAttached) {
+        ctrl.jumpTo(index: widget.tab.index);
+      } else if (attempts++ < 5) {
+        WidgetsBinding.instance.addPostFrameCallback(tryJump);
       }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback(tryJump);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didInitialJump) {
+      _didInitialJump = true;
+      _jumpToInitialIndexWhenReady();
     }
   }
 
@@ -660,7 +634,6 @@ $textWithBreaks
   Widget buildOuterList(TextBookLoaded state) {
     return ScrollablePositionedList.builder(
       key: ValueKey('combined-${widget.tab.book.title}'),
-      initialScrollIndex: widget.tab.index,
       itemPositionsListener: widget.tab.positionsListener,
       itemScrollController: widget.tab.scrollController,
       scrollOffsetController: widget.tab.mainOffsetController,
@@ -677,111 +650,93 @@ $textWithBreaks
     int index,
     TextBookLoaded state,
   ) {
-    final isSelected = state.selectedIndex == index;
-
-    // סנכרון ה-controller עם המצב - אם צריך להיות פתוח אבל סגור, פותחים אותו
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (isSelected && !controller.isExpanded) {
-        controller.expand();
-      } else if (!isSelected && controller.isExpanded) {
-        controller.collapse();
-      }
-    });
-
     // עוטפים את כל ה־ExpansionTile בתפריט קונטקסט ספציפי לאינדקס הנוכחי:
     return ctx.ContextMenuRegion(
       contextMenu: _buildContextMenuForIndex(state, index),
-      child: Container(
-        // רקע אחיד לשורה כולה - בלי שכבות מרובות
-        decoration: isSelected
-            ? BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withValues(alpha: 0.08),
-              )
-            : null,
-        child: Theme(
-          data: Theme.of(context).copyWith(
-            splashColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-          ),
-          child: ExpansionTile(
-            shape: const Border(),
-            controller: controller,
-            key: PageStorageKey(widget.data[index]),
-            iconColor: Colors.transparent,
-            tilePadding: const EdgeInsets.all(0.0),
-            collapsedIconColor: Colors.transparent,
-            // הסרת כל הצבעים והאפקטים מה-ExpansionTile - נשתמש רק ב-Container למעלה
-            backgroundColor: Colors.transparent,
-            collapsedBackgroundColor: Colors.transparent,
-            // ביטול אפקטי hover ו-splash
-            visualDensity: VisualDensity.compact,
-            onExpansionChanged: (expanded) {
-              // עדכון המצב בהתאם למצב החדש של ה-ExpansionTile
-              if (expanded) {
-                _textBookBloc.add(UpdateSelectedIndex(index));
-              } else {
-                _textBookBloc.add(const UpdateSelectedIndex(null));
-              }
-            },
-            title: Padding(
-              // padding קטן לעיצוב
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  BlocBuilder<SettingsBloc, SettingsState>(
-                    builder: (context, settingsState) {
-                      String data = widget.data[index];
-                      if (!settingsState.showTeamim) {
-                        data = utils.removeTeamim(data);
-                      }
-                      if (settingsState.replaceHolyNames) {
-                        data = utils.replaceHolyNames(data);
-                      }
-
-                      return HtmlWidget(
-                        '''
-                        <div style="text-align: justify; direction: rtl;">
-                          ${() {
-                          String processedData = state.removeNikud
-                              ? utils.highLight(utils.removeVolwels('$data\n'),
-                                  state.searchText)
-                              : utils.highLight('$data\n', state.searchText);
-                          // החלת עיצוב הסוגריים העגולים
-                          return utils.formatTextWithParentheses(processedData);
-                        }()}
-                        </div>
-                        ''',
-                        textStyle: TextStyle(
-                          fontSize: widget.textSize,
-                          fontFamily: settingsState.fontFamily,
-                          height: 1.5,
-                        ),
-                        onTapUrl: (url) async {
-                          return await HtmlLinkHandler.handleLink(context, url, widget.openBookCallback);
-                        },
-                      );
-                    },
-                  ),
-                ],
+      child: ExpansionTile(
+        shape: const Border(),
+        controller: controller,
+        key: PageStorageKey(widget.data[index]),
+        iconColor: Colors.transparent,
+        tilePadding: const EdgeInsets.all(0.0),
+        collapsedIconColor: Colors.transparent,
+        title: BlocBuilder<SettingsBloc, SettingsState>(
+          builder: (context, settingsState) {
+            String data = widget.data[index];
+            if (!settingsState.showTeamim) {
+              data = utils.removeTeamim(data);
+            }
+            if (settingsState.replaceHolyNames) {
+              data = utils.replaceHolyNames(data);
+            }
+            return HtmlWidget(
+              '''
+              <div style="text-align: justify; direction: rtl;">
+                ${() {
+                String processedData = state.removeNikud
+                    ? utils.highLight(
+                        utils.removeVolwels('$data\n'), state.searchText)
+                    : utils.highLight('$data\n', state.searchText);
+                // החלת עיצוב הסוגריים העגולים
+                return utils.formatTextWithParentheses(processedData);
+              }()}
+              </div>
+              ''',
+              textStyle: TextStyle(
+                fontSize: widget.textSize,
+                fontFamily: settingsState.fontFamily,
+                height: 1.5,
               ),
-            ),
-            children: [
-              widget.showCommentaryAsExpansionTiles
-                  ? CommentaryListBase(
-                      indexes: [index],
-                      fontSize: widget.textSize,
-                      openBookCallback: widget.openBookCallback,
-                      showSearch: false,
-                    )
-                  : const SizedBox.shrink(),
-            ],
-          ),
+              onTapUrl: (url) async {
+                return await HtmlLinkHandler.handleLink(context, url, widget.openBookCallback);
+              },
+              customWidgetBuilder: (element) {
+                if (element.localName == 'a') {
+                  final href = element.attributes['href'];
+                  if (href != null && (href.startsWith('book://') || href.startsWith('#'))) {
+                    return GestureDetector(
+                      onLongPress: () {
+                        // תמיכה במגע ארוך למובייל
+                        final RenderBox renderBox = context.findRenderObject() as RenderBox;
+                        final position = renderBox.localToGlobal(Offset.zero);
+                        HtmlLinkHandler.showPreview(
+                          context,
+                          href,
+                          position + const Offset(100, 100), // מיקום קבוע למובייל
+                        );
+                      },
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        onEnter: (event) {
+                          HtmlLinkHandler.showPreview(
+                            context,
+                            href,
+                            event.position,
+                          );
+                        },
+                        onExit: (_) {
+                          // נשאיר את התצוגה המקדימה פתוחה עד שהמשתמש ילחץ מחוץ לה
+                        },
+                        child: null, // נחזיר null כדי שה-HtmlWidget יבנה את הקישור בעצמו
+                      ),
+                    );
+                  }
+                }
+                return null;
+              },
+            );
+          },
         ),
+        children: [
+          widget.showCommentaryAsExpansionTiles
+              ? CommentaryListBase(
+                  indexes: [index],
+                  fontSize: widget.textSize,
+                  openBookCallback: widget.openBookCallback,
+                  showSearch: false,
+                )
+              : const SizedBox.shrink(),
+        ],
       ),
     );
   }
