@@ -6,9 +6,9 @@ import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/text_book/models/commentator_group.dart';
+
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/text_book/view/commentary_list_base.dart';
+
 import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -18,7 +18,7 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/notes/notes_system.dart';
 import 'package:otzaria/utils/copy_utils.dart';
-import 'package:otzaria/core/scaffold_messenger.dart';
+
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/utils/html_link_handler.dart';
 
@@ -139,16 +139,17 @@ class _CombinedViewState extends State<CombinedView> {
     final screenHeight = MediaQuery.of(context).size.height;
 
     // 2. זיהוי מפרשים שכבר שויכו לקבוצה
-    final groups = state.commentatorGroups;
-    final tanachGroup = CommentatorGroup.groupByTitle(groups, 'תורה שבכתב');
-    final chazalGroup = CommentatorGroup.groupByTitle(groups, 'חז"ל');
-    final rishonimGroup = CommentatorGroup.groupByTitle(groups, 'ראשונים');
-    final acharonimGroup = CommentatorGroup.groupByTitle(groups, 'אחרונים');
-    final modernGroup = CommentatorGroup.groupByTitle(groups, 'מחברי זמננו');
-    final ungroupedGroup = CommentatorGroup.groupByTitle(groups, 'שאר מפרשים');
+    final Set<String> alreadyListed = <String>{};
+    final List<String> torahShebichtav = <String>[];
+    final List<String> chazal = <String>[];
+    final List<String> rishonim = <String>[];
+    final List<String> acharonim = <String>[];
+    final List<String> modernCommentators = <String>[];
 
     // 3. יצירת רשימה של מפרשים שלא שויכו לאף קבוצה
-    final List<String> ungrouped = ungroupedGroup.commentators;
+    final List<String> ungrouped = state.availableCommentators
+        .where((c) => !alreadyListed.contains(c))
+        .toList();
 
     return ctx.ContextMenu(
       maxHeight: screenHeight * 0.9,
@@ -179,84 +180,56 @@ class _CombinedViewState extends State<CombinedView> {
               },
             ),
             const ctx.MenuDivider(),
-            ..._buildGroup(tanachGroup.title, tanachGroup.commentators, state),
-            if (tanachGroup.commentators.isNotEmpty &&
-                chazalGroup.commentators.isNotEmpty)
+            ..._buildGroup('תורה שבכתב', torahShebichtav, state),
+            if (torahShebichtav.isNotEmpty && chazal.isNotEmpty)
               const ctx.MenuDivider(),
-            ..._buildGroup(chazalGroup.title, chazalGroup.commentators, state),
-            if ((chazalGroup.commentators.isNotEmpty &&
-                    rishonimGroup.commentators.isNotEmpty) ||
-                (chazalGroup.commentators.isEmpty &&
-                    tanachGroup.commentators.isNotEmpty &&
-                    rishonimGroup.commentators.isNotEmpty))
+            ..._buildGroup('חז"ל', chazal, state),
+            if ((chazal.isNotEmpty && rishonim.isNotEmpty) ||
+                (chazal.isEmpty &&
+                    torahShebichtav.isNotEmpty &&
+                    rishonim.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup(
-                rishonimGroup.title, rishonimGroup.commentators, state),
-            if ((rishonimGroup.commentators.isNotEmpty &&
-                    acharonimGroup.commentators.isNotEmpty) ||
-                (rishonimGroup.commentators.isEmpty &&
-                    chazalGroup.commentators.isNotEmpty &&
-                    acharonimGroup.commentators.isNotEmpty) ||
-                (rishonimGroup.commentators.isEmpty &&
-                    chazalGroup.commentators.isEmpty &&
-                    tanachGroup.commentators.isNotEmpty &&
-                    acharonimGroup.commentators.isNotEmpty))
+            ..._buildGroup('הראשונים', rishonim, state),
+            if ((rishonim.isNotEmpty && acharonim.isNotEmpty) ||
+                (rishonim.isEmpty &&
+                    chazal.isNotEmpty &&
+                    acharonim.isNotEmpty) ||
+                (rishonim.isEmpty &&
+                    chazal.isEmpty &&
+                    torahShebichtav.isNotEmpty &&
+                    acharonim.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup(
-                acharonimGroup.title, acharonimGroup.commentators, state),
-            if ((acharonimGroup.commentators.isNotEmpty &&
-                    modernGroup.commentators.isNotEmpty) ||
-                (acharonimGroup.commentators.isEmpty &&
-                    rishonimGroup.commentators.isNotEmpty &&
-                    modernGroup.commentators.isNotEmpty) ||
-                (acharonimGroup.commentators.isEmpty &&
-                    rishonimGroup.commentators.isEmpty &&
-                    chazalGroup.commentators.isNotEmpty &&
-                    modernGroup.commentators.isNotEmpty) ||
-                (acharonimGroup.commentators.isEmpty &&
-                    rishonimGroup.commentators.isEmpty &&
-                    chazalGroup.commentators.isEmpty &&
-                    tanachGroup.commentators.isNotEmpty &&
-                    modernGroup.commentators.isNotEmpty))
+            ..._buildGroup('האחרונים', acharonim, state),
+            if ((acharonim.isNotEmpty && modernCommentators.isNotEmpty) ||
+                (acharonim.isEmpty &&
+                    rishonim.isNotEmpty &&
+                    modernCommentators.isNotEmpty) ||
+                (acharonim.isEmpty &&
+                    rishonim.isEmpty &&
+                    chazal.isNotEmpty &&
+                    modernCommentators.isNotEmpty) ||
+                (acharonim.isEmpty &&
+                    rishonim.isEmpty &&
+                    chazal.isEmpty &&
+                    torahShebichtav.isNotEmpty &&
+                    modernCommentators.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup(modernGroup.title, modernGroup.commentators, state),
-            if ((tanachGroup.commentators.isNotEmpty ||
-                    chazalGroup.commentators.isNotEmpty ||
-                    rishonimGroup.commentators.isNotEmpty ||
-                    acharonimGroup.commentators.isNotEmpty ||
-                    modernGroup.commentators.isNotEmpty) &&
+            ..._buildGroup('מחברי זמננו', modernCommentators, state),
+            if ((torahShebichtav.isNotEmpty ||
+                    chazal.isNotEmpty ||
+                    rishonim.isNotEmpty ||
+                    acharonim.isNotEmpty ||
+                    modernCommentators.isNotEmpty) &&
                 ungrouped.isNotEmpty)
               const ctx.MenuDivider(),
-            ..._buildGroup(ungroupedGroup.title, ungrouped, state),
+            ..._buildGroup('שאר המפרשים', ungrouped, state),
           ],
         ),
-        ctx.MenuItem.submenu(
-          label: 'קישורים',
-          enabled: state.visibleLinks.isNotEmpty,
-          items: state.visibleLinks
-              .map(
-                (link) => ctx.MenuItem(
-                  label: link.heRef,
-                  onSelected: () {
-                    widget.openBookCallback(
-                      TextBookTab(
-                        book: TextBook(
-                          title: utils.getTitleFromPath(link.path2),
-                        ),
-                        index: link.index2 - 1,
-                        openLeftPane:
-                            (Settings.getValue<bool>('key-pin-sidebar') ??
-                                    false) ||
-                                (Settings.getValue<bool>(
-                                        'key-default-sidebar-open') ??
-                                    false),
-                      ),
-                    );
-                  },
-                ),
-              )
-              .toList(),
-        ),
+        // ctx.MenuItem.submenu(
+        //   label: 'קישורים',
+        //   enabled: false,
+        //   items: [],
+        // ),
         const ctx.MenuDivider(),
         // הערות אישיות
         ctx.MenuItem(
@@ -325,7 +298,9 @@ class _CombinedViewState extends State<CombinedView> {
     // נשתמש בבחירה האחרונה שנשמרה, או בבחירה הנוכחית
     final text = _lastSelectedText ?? _selectedText;
     if (text == null || text.trim().isEmpty) {
-      UiSnack.show('אנא בחר טקסט ליצירת הערה אישית');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('אנא בחר טקסט ליצירת הערה אישית')),
+      );
       return;
     }
 
@@ -514,18 +489,17 @@ $textWithBreaks
           );
         }
 
-        // שימוש בפונקציית העזר החדשה להעתקה
-        await CopyUtils.copyStyledToClipboard(
-          plainText: finalPlainText,
-          htmlText: htmlContentToUse,
-          fontFamily: settingsState.fontFamily,
-          fontSize: widget.textSize,
-        );
+        // העתקה פשוטה
+        final item = DataWriterItem();
+        item.add(Formats.plainText(finalPlainText));
+        item.add(Formats.htmlText(htmlContentToUse));
+        await clipboard.write([item]);
       }
     } catch (e) {
       if (mounted) {
-        UiSnack.showError('שגיאה בהעתקה מעוצבת: $e',
-            backgroundColor: Theme.of(context).colorScheme.error);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('שגיאה בהעתקה מעוצבת: $e')),
+        );
       }
     }
   }
@@ -564,12 +538,16 @@ $textWithBreaks
                   !currentState.showNotesSidebar) {
                 textBookBloc.add(const ToggleNotesSidebar());
               }
-              UiSnack.show(UiSnack.noteCreated);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('ההערה נוצרה בהצלחה')),
+              );
             }
           } catch (e) {
             if (mounted) {
               // Dialog is already closed by NoteEditorDialog
-              UiSnack.showError('שגיאה ביצירת הערה: $e');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('שגיאה ביצירת הערה: $e')),
+              );
             }
           }
         },
@@ -729,12 +707,7 @@ $textWithBreaks
         ),
         children: [
           widget.showCommentaryAsExpansionTiles
-              ? CommentaryListBase(
-                  indexes: [index],
-                  fontSize: widget.textSize,
-                  openBookCallback: widget.openBookCallback,
-                  showSearch: false,
-                )
+              ? const SizedBox.shrink() // נסיר את CommentaryListBase לעת עתה
               : const SizedBox.shrink(),
         ],
       ),
@@ -779,7 +752,7 @@ $textWithBreaks
   /// Opens the text editor for a specific paragraph
   void _editParagraph(int paragraphIndex) {
     if (paragraphIndex >= 0 && paragraphIndex < widget.data.length) {
-      context.read<TextBookBloc>().add(OpenEditor(index: paragraphIndex));
+      // context.read<TextBookBloc>().add(OpenEditor(index: paragraphIndex)); // נסיר לעת עתה
     }
   }
 }
@@ -801,7 +774,9 @@ class _NotesSection extends StatelessWidget {
       onClose: onClose,
       onNavigateToPosition: (start, end) {
         // ניווט למיקום ההערה בטקסט
-        UiSnack.show('ניווט למיקום $start-$end');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('ניווט למיקום $start-$end')),
+        );
       },
     );
   }
