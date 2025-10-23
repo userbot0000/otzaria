@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 /// מחלקה לטיפול בקישורי HTML בתוך הטקסט
 class HtmlLinkHandler {
+  static OverlayEntry? _currentOverlay;
+  static final ItemScrollController _previewScrollController = ItemScrollController();
   /// מנסה לפענח URL בצורה בטוחה, תומך בטקסט רגיל ו-URL encoded
   static String _safeDecode(String text) {
     if (text.isEmpty) return text;
@@ -26,6 +30,84 @@ class HtmlLinkHandler {
       debugPrint('Failed to decode URL component: $text, error: $e');
       return text;
     }
+  }
+
+  /// מציג תצוגה מקדימה של קישור
+  static Future<void> showPreview(
+    BuildContext context,
+    String url,
+    Offset position,
+  ) async {
+    // סגירת תצוגה מקדימה קיימת
+    hidePreview();
+
+    try {
+      String? bookTitle;
+      String? headerName;
+      int startIndex = 0;
+
+      // פענוח הקישור
+      if (url.startsWith('#')) {
+        // קישור פנימי - נשתמש בספר הנוכחי
+        final textBookBloc = context.read<TextBookBloc>();
+        final state = textBookBloc.state;
+        if (state is! TextBookLoaded) return;
+        
+        bookTitle = state.book.title;
+        headerName = _safeDecode(url.substring(1));
+      } else if (url.startsWith('book://')) {
+        final bookUrl = url.substring(7);
+        if (bookUrl.contains('#')) {
+          final parts = bookUrl.split('#');
+          bookTitle = _safeDecode(parts[0]);
+          headerName = _safeDecode(parts[1]);
+        } else {
+          bookTitle = _safeDecode(bookUrl);
+        }
+      } else {
+        return; // לא קישור שאנחנו מטפלים בו
+      }
+
+      if (bookTitle == null) return;
+
+      // טעינת הספר
+      final library = await DataRepository.instance.library;
+      final foundBook = await library.findBookByTitle(bookTitle, TextBook);
+      if (foundBook == null || foundBook is! TextBook) return;
+
+      final book = foundBook as TextBook;
+      final content = await book.text;
+      final lines = content.split('\n');
+
+      // חיפוש האינדקס אם יש כותרת
+      if (headerName != null) {
+        final headerIndex = await _findHeaderIndex(book, headerName);
+        if (headerIndex != null) {
+          startIndex = headerIndex;
+        }
+      }
+
+      // יצירת התצוגה המקדימה
+      _currentOverlay = OverlayEntry(
+        builder: (context) => _PreviewOverlay(
+          position: position,
+          bookTitle: bookTitle!,
+          lines: lines,
+          startIndex: startIndex,
+          onClose: hidePreview,
+        ),
+      );
+
+      Overlay.of(context).insert(_currentOverlay!);
+    } catch (e) {
+      debugPrint('שגיאה בהצגת תצוגה מקדימה: $e');
+    }
+  }
+
+  /// מסתיר את התצוגה המקדימה
+  static void hidePreview() {
+    _currentOverlay?.remove();
+    _currentOverlay = null;
   }
 
   /// מטפל בלחיצה על קישור HTML
@@ -287,5 +369,173 @@ class HtmlLinkHandler {
     }
     
     return false;
+  }
+}
+
+/// Widget לתצוגה מקדימה של קישור
+class _PreviewOverlay extends StatefulWidget {
+  final Offset position;
+  final String bookTitle;
+  final List<String> lines;
+  final int startIndex;
+  final VoidCallback onClose;
+
+  const _PreviewOverlay({
+    required this.position,
+    required this.bookTitle,
+    required this.lines,
+    required this.startIndex,
+    required this.onClose,
+  });
+
+  @override
+  State<_PreviewOverlay> createState() => _PreviewOverlayState();
+}
+
+class _PreviewOverlayState extends State<_PreviewOverlay> {
+  final ItemScrollController _scrollController = ItemScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // ניווט לאינדקס הנכון אחרי בניית הווידג'ט
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.isAttached && widget.startIndex > 0) {
+        _scrollController.jumpTo(index: widget.startIndex);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    const overlayWidth = 400.0;
+    const overlayHeight = 500.0;
+
+    // חישוב מיקום החלון
+    double left = widget.position.dx;
+    double top = widget.position.dy;
+
+    // וידוא שהחלון לא יוצא מהמסך
+    if (left + overlayWidth > screenSize.width) {
+      left = screenSize.width - overlayWidth - 20;
+    }
+    if (top + overlayHeight > screenSize.height) {
+      top = screenSize.height - overlayHeight - 20;
+    }
+    if (left < 20) left = 20;
+    if (top < 20) top = 20;
+
+    return Stack(
+      children: [
+        // רקע שקוף לסגירה בלחיצה
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: widget.onClose,
+            child: Container(
+              color: Colors.transparent,
+            ),
+          ),
+        ),
+        // החלון המרחף
+        Positioned(
+          left: left,
+          top: top,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: overlayWidth,
+              height: overlayHeight,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                ),
+              ),
+              child: Column(
+                children: [
+                  // כותרת
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.bookTitle,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: widget.onClose,
+                          icon: const Icon(Icons.close),
+                          iconSize: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // תוכן
+                  Expanded(
+                    child: ScrollablePositionedList.builder(
+                      itemScrollController: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: widget.lines.length,
+                      itemBuilder: (context, index) {
+                        final line = widget.lines[index];
+                        if (line.trim().isEmpty) {
+                          return const SizedBox(height: 8);
+                        }
+
+                        // הדגשת השורה הנוכחית
+                        final isHighlighted = index == widget.startIndex;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(8),
+                          decoration: isHighlighted
+                              ? BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                                  ),
+                                )
+                              : null,
+                          child: HtmlWidget(
+                            '''
+                            <div style="text-align: justify; direction: rtl;">
+                              ${utils.formatTextWithParentheses(line)}
+                            </div>
+                            ''',
+                            textStyle: TextStyle(
+                              fontSize: 14,
+                              height: 1.5,
+                              color: isHighlighted 
+                                  ? Theme.of(context).colorScheme.primary
+                                  : null,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
