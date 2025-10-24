@@ -21,6 +21,7 @@ import 'package:otzaria/utils/copy_utils.dart';
 
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/utils/html_link_handler.dart';
+import 'package:otzaria/utils/auto_link_processor.dart';
 
 class CombinedView extends StatefulWidget {
   CombinedView({
@@ -657,6 +658,12 @@ $textWithBreaks
                     : utils.highLight('$data\n', state.searchText);
                 // החלת עיצוב הסוגריים העגולים
                 processedData = utils.formatTextWithParentheses(processedData);
+                // הוספת קישורים אוטומטיים למילים במילון
+                processedData = AutoLinkProcessor.instance.processText(
+                  processedData,
+                  enableAutoLinks: settingsState.enableAutoLinks,
+                  excludeExistingLinks: true,
+                );
                 return processedData;
               }()}
               </div>
