@@ -253,6 +253,20 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                       leading: const Icon(Icons.menu_book),
                       onTap: () => showReadingSettingsDialog(context),
                     ),
+                    SwitchSettingsTile(
+                      settingKey: 'key-enable-auto-links',
+                      title: 'קישורים אוטומטיים',
+                      enabledLabel: 'מילים במילון יוצגו כקישורים לספרים',
+                      disabledLabel: 'מילים במילון יוצגו כטקסט רגיל',
+                      leading: const Icon(Icons.link),
+                      defaultValue: state.enableAutoLinks,
+                      onChange: (value) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(UpdateEnableAutoLinks(value));
+                      },
+                      activeColor: Theme.of(context).cardColor,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 24),

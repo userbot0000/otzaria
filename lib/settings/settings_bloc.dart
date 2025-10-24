@@ -30,6 +30,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateFacetFilteringWidth>(_onUpdateFacetFilteringWidth);
     on<UpdateCopyWithHeaders>(_onUpdateCopyWithHeaders);
     on<UpdateCopyHeaderFormat>(_onUpdateCopyHeaderFormat);
+    on<UpdateEnableAutoLinks>(_onUpdateEnableAutoLinks);
   }
 
   Future<void> _onLoadSettings(
@@ -58,6 +59,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       facetFilteringWidth: settings['facetFilteringWidth'],
       copyWithHeaders: settings['copyWithHeaders'],
       copyHeaderFormat: settings['copyHeaderFormat'],
+      enableAutoLinks: settings['enableAutoLinks'],
     ));
   }
 
@@ -219,5 +221,13 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateCopyHeaderFormat(event.copyHeaderFormat);
     emit(state.copyWith(copyHeaderFormat: event.copyHeaderFormat));
+  }
+
+  Future<void> _onUpdateEnableAutoLinks(
+    UpdateEnableAutoLinks event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateEnableAutoLinks(event.enableAutoLinks);
+    emit(state.copyWith(enableAutoLinks: event.enableAutoLinks));
   }
 }
