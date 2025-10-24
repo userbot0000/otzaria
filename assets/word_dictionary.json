@@ -1,0 +1,582 @@
+{
+  "ברכות": {
+    "bookTitle": "ברכות",
+    "type": "book",
+    "description": "מסכת ברכות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "שבת": {
+    "bookTitle": "שבת",
+    "type": "book",
+    "description": "מסכת שבת",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "עירובין": {
+    "bookTitle": "עירובין",
+    "type": "book",
+    "description": "מסכת עירובין",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "פסחים": {
+    "bookTitle": "פסחים",
+    "type": "book",
+    "description": "מסכת פסחים",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "יומא": {
+    "bookTitle": "יומא",
+    "type": "book",
+    "description": "מסכת יומא",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "סוכה": {
+    "bookTitle": "סוכה",
+    "type": "book",
+    "description": "מסכת סוכה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "ביצה": {
+    "bookTitle": "ביצה",
+    "type": "book",
+    "description": "מסכת ביצה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "ראש השנה": {
+    "bookTitle": "ראש השנה",
+    "type": "book",
+    "description": "מסכת ראש השנה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "תענית": {
+    "bookTitle": "תענית",
+    "type": "book",
+    "description": "מסכת תענית",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "מגילה": {
+    "bookTitle": "מגילה",
+    "type": "book",
+    "description": "מסכת מגילה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "גיטין": {
+    "bookTitle": "גיטין",
+    "type": "book",
+    "description": "מסכת גיטין",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "קידושין": {
+    "bookTitle": "קידושין",
+    "type": "book",
+    "description": "מסכת קידושין",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "בבא קמא": {
+    "bookTitle": "בבא קמא",
+    "type": "book",
+    "description": "מסכת בבא קמא",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "בבא מציעא": {
+    "bookTitle": "בבא מציעא",
+    "type": "book",
+    "description": "מסכת בבא מציעא",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "בבא בתרא": {
+    "bookTitle": "בבא בתרא",
+    "type": "book",
+    "description": "מסכת בבא בתרא",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "סנהדרין": {
+    "bookTitle": "סנהדרין",
+    "type": "book",
+    "description": "מסכת סנהדרין",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "מכות": {
+    "bookTitle": "מכות",
+    "type": "book",
+    "description": "מסכת מכות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "שבועות": {
+    "bookTitle": "שבועות",
+    "type": "book",
+    "description": "מסכת שבועות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "עבודה זרה": {
+    "bookTitle": "עבודה זרה",
+    "type": "book",
+    "description": "מסכת עבודה זרה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "הוריות": {
+    "bookTitle": "הוריות",
+    "type": "book",
+    "description": "מסכת הוריות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "זבחים": {
+    "bookTitle": "זבחים",
+    "type": "book",
+    "description": "מסכת זבחים",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "מנחות": {
+    "bookTitle": "מנחות",
+    "type": "book",
+    "description": "מסכת מנחות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "חולין": {
+    "bookTitle": "חולין",
+    "type": "book",
+    "description": "מסכת חולין",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "בכורות": {
+    "bookTitle": "בכורות",
+    "type": "book",
+    "description": "מסכת בכורות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "ערכין": {
+    "bookTitle": "ערכין",
+    "type": "book",
+    "description": "מסכת ערכין",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "תמורה": {
+    "bookTitle": "תמורה",
+    "type": "book",
+    "description": "מסכת תמורה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "כריתות": {
+    "bookTitle": "כריתות",
+    "type": "book",
+    "description": "מסכת כריתות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "מעילה": {
+    "bookTitle": "מעילה",
+    "type": "book",
+    "description": "מסכת מעילה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "נדה": {
+    "bookTitle": "נדה",
+    "type": "book",
+    "description": "מסכת נדה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "רש\"י": {
+    "bookTitle": "רש\"י",
+    "type": "commentary",
+    "description": "פירוש רש\"י",
+    "caseSensitive": false,
+    "wholeWordOnly": false
+  },
+  "תוספות": {
+    "bookTitle": "תוספות",
+    "type": "commentary",
+    "description": "פירוש התוספות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "רמב\"ם": {
+    "bookTitle": "רמב\"ם",
+    "type": "book",
+    "description": "הרמב\"ם - משנה תורה",
+    "caseSensitive": false,
+    "wholeWordOnly": false
+  },
+  "שולחן ערוך": {
+    "bookTitle": "שולחן ערוך",
+    "type": "book",
+    "description": "שולחן ערוך",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "רמ\"א": {
+    "bookTitle": "רמ\"א",
+    "type": "commentary",
+    "description": "הגהות הרמ\"א",
+    "caseSensitive": false,
+    "wholeWordOnly": false
+  },
+  "משנה ברורה": {
+    "bookTitle": "משנה ברורה",
+    "type": "commentary",
+    "description": "משנה ברורה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "בראשית": {
+    "bookTitle": "בראשית",
+    "type": "book",
+    "description": "ספר בראשית",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "שמות": {
+    "bookTitle": "שמות",
+    "type": "book",
+    "description": "ספר שמות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "ויקרא": {
+    "bookTitle": "ויקרא",
+    "type": "book",
+    "description": "ספר ויקרא",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "במדבר": {
+    "bookTitle": "במדבר",
+    "type": "book",
+    "description": "ספר במדבר",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "דברים": {
+    "bookTitle": "דברים",
+    "type": "book",
+    "description": "ספר דברים",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "יהושע": {
+    "bookTitle": "יהושע",
+    "type": "book",
+    "description": "ספר יהושע",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "שופטים": {
+    "bookTitle": "שופטים",
+    "type": "book",
+    "description": "ספר שופטים",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "שמואל": {
+    "bookTitle": "שמואל",
+    "type": "book",
+    "description": "ספר שמואל",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "מלכים": {
+    "bookTitle": "מלכים",
+    "type": "book",
+    "description": "ספר מלכים",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "ישעיהו": {
+    "bookTitle": "ישעיהו",
+    "type": "book",
+    "description": "ספר ישעיהו",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "ירמיהו": {
+    "bookTitle": "ירמיהו",
+    "type": "book",
+    "description": "ספר ירמיהו",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "יחזקאל": {
+    "bookTitle": "יחזקאל",
+    "type": "book",
+    "description": "ספר יחזקאל",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "תהילים": {
+    "bookTitle": "תהילים",
+    "type": "book",
+    "description": "ספר תהילים",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "משלי": {
+    "bookTitle": "משלי",
+    "type": "book",
+    "description": "ספר משלי",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "איוב": {
+    "bookTitle": "איוב",
+    "type": "book",
+    "description": "ספר איוב",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "הלכה": {
+    "bookTitle": "הלכה",
+    "type": "concept",
+    "description": "מושג ההלכה",
+    "searchQuery": "הלכה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "אגדה": {
+    "bookTitle": "אגדה",
+    "type": "concept",
+    "description": "מושג האגדה",
+    "searchQuery": "אגדה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "מצוה": {
+    "bookTitle": "מצוה",
+    "type": "concept",
+    "description": "מושג המצוה",
+    "searchQuery": "מצוה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "מצות": {
+    "bookTitle": "מצות",
+    "type": "concept",
+    "description": "מצות",
+    "searchQuery": "מצות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "תפילה": {
+    "bookTitle": "תפילה",
+    "type": "concept",
+    "description": "מושג התפילה",
+    "searchQuery": "תפילה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "כשרות": {
+    "bookTitle": "כשרות",
+    "type": "concept",
+    "description": "מושג הכשרות",
+    "searchQuery": "כשרות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "משנה": {
+    "bookTitle": "משנה",
+    "type": "book",
+    "description": "המשנה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "גמרא": {
+    "bookTitle": "גמרא",
+    "type": "concept",
+    "description": "הגמרא",
+    "searchQuery": "גמרא",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "תלמוד": {
+    "bookTitle": "תלמוד",
+    "type": "concept",
+    "description": "התלמוד",
+    "searchQuery": "תלמוד",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "מדרש": {
+    "bookTitle": "מדרש",
+    "type": "concept",
+    "description": "המדרש",
+    "searchQuery": "מדרש",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "זוהר": {
+    "bookTitle": "זוהר",
+    "type": "book",
+    "description": "ספר הזוהר",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "קבלה": {
+    "bookTitle": "קבלה",
+    "type": "concept",
+    "description": "תורת הקבלה",
+    "searchQuery": "קבלה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "חסידות": {
+    "bookTitle": "חסידות",
+    "type": "concept",
+    "description": "תורת החסידות",
+    "searchQuery": "חסידות",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "מוסר": {
+    "bookTitle": "מוסר",
+    "type": "concept",
+    "description": "תורת המוסר",
+    "searchQuery": "מוסר",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "פילוסופיה": {
+    "bookTitle": "פילוסופיה",
+    "type": "concept",
+    "description": "פילוסופיה יהודית",
+    "searchQuery": "פילוסופיה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "רמב\"ן": {
+    "bookTitle": "רמב\"ן",
+    "type": "commentary",
+    "description": "פירוש הרמב\"ן",
+    "caseSensitive": false,
+    "wholeWordOnly": false
+  },
+  "רשב\"א": {
+    "bookTitle": "רשב\"א",
+    "type": "commentary",
+    "description": "פירוש הרשב\"א",
+    "caseSensitive": false,
+    "wholeWordOnly": false
+  },
+  "ריטב\"א": {
+    "bookTitle": "ריטב\"א",
+    "type": "commentary",
+    "description": "פירוש הריטב\"א",
+    "caseSensitive": false,
+    "wholeWordOnly": false
+  },
+  "רא\"ש": {
+    "bookTitle": "רא\"ש",
+    "type": "commentary",
+    "description": "פירוש הרא\"ש",
+    "caseSensitive": false,
+    "wholeWordOnly": false
+  },
+  "ר\"ן": {
+    "bookTitle": "ר\"ן",
+    "type": "commentary",
+    "description": "פירוש הר\"ן",
+    "caseSensitive": false,
+    "wholeWordOnly": false
+  },
+  "מהרש\"א": {
+    "bookTitle": "מהרש\"א",
+    "type": "commentary",
+    "description": "פירוש המהרש\"א",
+    "caseSensitive": false,
+    "wholeWordOnly": false
+  },
+  "מהרש\"ל": {
+    "bookTitle": "מהרש\"ל",
+    "type": "commentary",
+    "description": "פירוש המהרש\"ל",
+    "caseSensitive": false,
+    "wholeWordOnly": false
+  },
+  "בית יוסף": {
+    "bookTitle": "בית יוסף",
+    "type": "commentary",
+    "description": "פירוש בית יוסף",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "דרכי משה": {
+    "bookTitle": "דרכי משה",
+    "type": "commentary",
+    "description": "פירוש דרכי משה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "טור": {
+    "bookTitle": "טור",
+    "type": "book",
+    "description": "ארבעה טורים",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "ביאור הלכה": {
+    "bookTitle": "ביאור הלכה",
+    "type": "commentary",
+    "description": "ביאור הלכה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "שער הציון": {
+    "bookTitle": "שער הציון",
+    "type": "commentary",
+    "description": "שער הציון",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "אגרות משה": {
+    "bookTitle": "אגרות משה",
+    "type": "book",
+    "description": "שו\"ת אגרות משה",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "חזון איש": {
+    "bookTitle": "חזון איש",
+    "type": "commentary",
+    "description": "פירוש החזון איש",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "ספר החינוך": {
+    "bookTitle": "ספר החינוך",
+    "type": "book",
+    "description": "ספר החינוך",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  },
+  "מנחת חינוך": {
+    "bookTitle": "מנחת חינוך",
+    "type": "commentary",
+    "description": "מנחת חינוך",
+    "caseSensitive": false,
+    "wholeWordOnly": true
+  }
+}
