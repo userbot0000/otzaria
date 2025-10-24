@@ -50,6 +50,7 @@ import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:shamor_zachor/providers/shamor_zachor_progress_provider.dart';
+import 'package:otzaria/utils/auto_link_processor.dart';
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
@@ -208,6 +209,16 @@ Future<void> initialize() async {
       debugPrint('Failed to initialize notes database: $e');
     }
     // Continue without notes functionality if database fails
+  }
+
+  // Initialize auto link processor
+  try {
+    await AutoLinkProcessor.instance.initialize();
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('Failed to initialize auto link processor: $e');
+    }
+    // Continue without auto links functionality if initialization fails
   }
 }
 
