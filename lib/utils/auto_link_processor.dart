@@ -13,7 +13,10 @@ class AutoLinkProcessor {
   Future<void> initialize() async {
     if (_initialized) return;
     
+    print('AutoLinkProcessor: Starting initialization...');
     await WordDictionary.instance.loadDictionary();
+    final wordCount = WordDictionary.instance.getAllWords().length;
+    print('AutoLinkProcessor: Initialized with $wordCount words');
     _initialized = true;
   }
   
@@ -23,7 +26,18 @@ class AutoLinkProcessor {
     bool enableAutoLinks = true,
     bool excludeExistingLinks = true,
   }) {
-    if (!enableAutoLinks || !_initialized) {
+    if (!enableAutoLinks) {
+      return htmlText;
+    }
+    
+    // אם לא מאותחל, לא נעשה כלום
+    if (!_initialized) {
+      return htmlText;
+    }
+    
+    // בדיקה שיש מילים במילון
+    final dictionary = WordDictionary.instance.getAllWords();
+    if (dictionary.isEmpty) {
       return htmlText;
     }
     
@@ -37,36 +51,73 @@ class AutoLinkProcessor {
   
   /// מעבד טקסט פשוט ללא קישורים קיימים
   String _processTextSimple(String htmlText) {
-    String result = htmlText;
-    final dictionary = WordDictionary.instance.getAllWords();
-    
-    // עובר על כל המילים במילון
-    dictionary.forEach((word, link) {
-      // בונה ביטוי רגולרי בהתאם להגדרות
-      String pattern;
-      if (link.wholeWordOnly) {
-        // התאמה למילה שלמה בלבד
-        pattern = '\\b$word\\b';
-      } else {
-        // התאמה חלקית
-        pattern = word;
+    try {
+      String result = htmlText;
+      final dictionary = WordDictionary.instance.getAllWords();
+      
+      // ממיין את המילים לפי אורך (הארוכות ביותר קודם) כדי למנוע התנגשויות
+      final sortedWords = dictionary.keys.toList()
+        ..sort((a, b) => b.length.compareTo(a.length));
+      
+      // עובר על כל המילים במילון
+      for (final word in sortedWords) {
+        final link = dictionary[word]!;
+        
+        // escape תווים מיוחדים ב-regex
+        final escapedWord = RegExp.escape(word);
+        
+        // בונה ביטוי רגולרי פשוט יותר
+        String pattern;
+        if (link.wholeWordOnly) {
+          // התאמה למילה שלמה - מוקפת ברווחים, סימני פיסוק או תחילת/סוף
+          pattern = '(^|[\\s>])($escapedWord)([\\s<,.;:!?"\']|\$)';
+        } else {
+          // התאמה חלקית
+          pattern = escapedWord;
+        }
+        
+        try {
+          final regex = RegExp(
+            pattern,
+            caseSensitive: link.caseSensitive,
+            unicode: true,
+            multiLine: true,
+          );
+          
+          // מחליף את המילה בקישור
+          result = result.replaceAllMapped(regex, (match) {
+            if (link.wholeWordOnly) {
+              // יש לנו 3 קבוצות: prefix, word, suffix
+              final prefix = match.group(1) ?? '';
+              final matchedText = match.group(2) ?? word;
+              final suffix = match.group(3) ?? '';
+              
+              // בודק שהמילה לא כבר בתוך קישור
+              final beforeMatch = result.substring(0, match.start);
+              if (beforeMatch.contains('<a ') && 
+                  beforeMatch.lastIndexOf('<a ') > beforeMatch.lastIndexOf('</a>')) {
+                return match.group(0)!;
+              }
+              
+              final url = link.createUrl();
+              return '$prefix<a href="$url" class="auto-link">$matchedText</a>$suffix';
+            } else {
+              final matchedText = match.group(0)!;
+              final url = link.createUrl();
+              return '<a href="$url" class="auto-link">$matchedText</a>';
+            }
+          });
+        } catch (e) {
+          print('Error processing word "$word": $e');
+          continue;
+        }
       }
       
-      final regex = RegExp(
-        pattern,
-        caseSensitive: link.caseSensitive,
-        unicode: true,
-      );
-      
-      // מחליף את המילה בקישור
-      result = result.replaceAllMapped(regex, (match) {
-        final matchedText = match.group(0)!;
-        final url = link.createUrl();
-        return '<a href="$url" class="auto-link">$matchedText</a>';
-      });
-    });
-    
-    return result;
+      return result;
+    } catch (e) {
+      print('Error in _processTextSimple: $e');
+      return htmlText; // במקרה של שגיאה, מחזיר את הטקסט המקורי
+    }
   }
   
   /// מעבד טקסט עם קישורים קיימים (לא נוגע בתוכן של תגי <a>)
