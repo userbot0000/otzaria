@@ -6,9 +6,9 @@ import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/text_book/models/commentator_group.dart';
+
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/text_book/view/commentary_list_base.dart';
+
 import 'package:otzaria/widgets/progressive_scrolling.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -18,7 +18,7 @@ import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/notes/notes_system.dart';
 import 'package:otzaria/utils/copy_utils.dart';
-import 'package:otzaria/core/scaffold_messenger.dart';
+
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:otzaria/utils/html_link_handler.dart';
 
@@ -47,55 +47,29 @@ class CombinedView extends StatefulWidget {
 class _CombinedViewState extends State<CombinedView> {
   final GlobalKey<SelectionAreaState> _selectionKey =
       GlobalKey<SelectionAreaState>();
+  bool _didInitialJump = false;
 
-  // שמירת reference ל-BLoC לשימוש ב-listeners
-  late final TextBookBloc _textBookBloc;
-
-  @override
-  void initState() {
-    super.initState();
-    // שמירת ה-BLoC מראש
-    _textBookBloc = context.read<TextBookBloc>();
-
-    // האזנה לשינויים במיקומי הפריטים כדי לאפס את הבחירה בגלילה
-    widget.tab.positionsListener.itemPositions.addListener(_onScroll);
-    // עדכון האינדקס ב-tab בזמן אמת
-    widget.tab.positionsListener.itemPositions.addListener(_updateTabIndex);
-  }
-
-  @override
-  void dispose() {
-    widget.tab.positionsListener.itemPositions.removeListener(_onScroll);
-    widget.tab.positionsListener.itemPositions.removeListener(_updateTabIndex);
-    super.dispose();
-  }
-
-  // עדכון האינדקס הנוכחי ב-tab
-  void _updateTabIndex() {
-    final positions = widget.tab.positionsListener.itemPositions.value;
-    if (positions.isNotEmpty) {
-      // שומר את האינדקס של הפריט הראשון הנראה
-      widget.tab.index = positions.first.index;
-    }
-  }
-
-  // פונקציה שתשלח אירוע איפוס ל-selectedIndex אם יש גלילה משמעותית
-  void _onScroll() {
-    // אנחנו רוצים את הלוגיקה הזו רק בתצוגה המפוצלת (SimpleBookView לשעבר)
-    // שבה המפרשים מוצגים בפאנל צד (כלומר: לא ExpansionTiles)
-    if (widget.showCommentaryAsExpansionTiles) return;
-
-    final state = _textBookBloc.state;
-    if (state is! TextBookLoaded) return;
-
-    final currentSelectedIndex = state.selectedIndex;
-
-    if (currentSelectedIndex != null) {
-      // אם האינדקס הנבחר כבר לא נראה (האינדקסים הנראים שונו עקב גלילה)
-      final visibleIndices = state.visibleIndices;
-      if (!visibleIndices.contains(currentSelectedIndex)) {
-        _textBookBloc.add(const UpdateSelectedIndex(null));
+  void _jumpToInitialIndexWhenReady() {
+    int attempts = 0;
+    void tryJump(Duration _) {
+      if (!mounted) return;
+      final ctrl = widget.tab.scrollController;
+      if (ctrl.isAttached) {
+        ctrl.jumpTo(index: widget.tab.index);
+      } else if (attempts++ < 5) {
+        WidgetsBinding.instance.addPostFrameCallback(tryJump);
       }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback(tryJump);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didInitialJump) {
+      _didInitialJump = true;
+      _jumpToInitialIndexWhenReady();
     }
   }
 
@@ -165,16 +139,17 @@ class _CombinedViewState extends State<CombinedView> {
     final screenHeight = MediaQuery.of(context).size.height;
 
     // 2. זיהוי מפרשים שכבר שויכו לקבוצה
-    final groups = state.commentatorGroups;
-    final tanachGroup = CommentatorGroup.groupByTitle(groups, 'תורה שבכתב');
-    final chazalGroup = CommentatorGroup.groupByTitle(groups, 'חז"ל');
-    final rishonimGroup = CommentatorGroup.groupByTitle(groups, 'ראשונים');
-    final acharonimGroup = CommentatorGroup.groupByTitle(groups, 'אחרונים');
-    final modernGroup = CommentatorGroup.groupByTitle(groups, 'מחברי זמננו');
-    final ungroupedGroup = CommentatorGroup.groupByTitle(groups, 'שאר מפרשים');
+    final Set<String> alreadyListed = <String>{};
+    final List<String> torahShebichtav = <String>[];
+    final List<String> chazal = <String>[];
+    final List<String> rishonim = <String>[];
+    final List<String> acharonim = <String>[];
+    final List<String> modernCommentators = <String>[];
 
     // 3. יצירת רשימה של מפרשים שלא שויכו לאף קבוצה
-    final List<String> ungrouped = ungroupedGroup.commentators;
+    final List<String> ungrouped = state.availableCommentators
+        .where((c) => !alreadyListed.contains(c))
+        .toList();
 
     return ctx.ContextMenu(
       maxHeight: screenHeight * 0.9,
@@ -205,84 +180,56 @@ class _CombinedViewState extends State<CombinedView> {
               },
             ),
             const ctx.MenuDivider(),
-            ..._buildGroup(tanachGroup.title, tanachGroup.commentators, state),
-            if (tanachGroup.commentators.isNotEmpty &&
-                chazalGroup.commentators.isNotEmpty)
+            ..._buildGroup('תורה שבכתב', torahShebichtav, state),
+            if (torahShebichtav.isNotEmpty && chazal.isNotEmpty)
               const ctx.MenuDivider(),
-            ..._buildGroup(chazalGroup.title, chazalGroup.commentators, state),
-            if ((chazalGroup.commentators.isNotEmpty &&
-                    rishonimGroup.commentators.isNotEmpty) ||
-                (chazalGroup.commentators.isEmpty &&
-                    tanachGroup.commentators.isNotEmpty &&
-                    rishonimGroup.commentators.isNotEmpty))
+            ..._buildGroup('חז"ל', chazal, state),
+            if ((chazal.isNotEmpty && rishonim.isNotEmpty) ||
+                (chazal.isEmpty &&
+                    torahShebichtav.isNotEmpty &&
+                    rishonim.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup(
-                rishonimGroup.title, rishonimGroup.commentators, state),
-            if ((rishonimGroup.commentators.isNotEmpty &&
-                    acharonimGroup.commentators.isNotEmpty) ||
-                (rishonimGroup.commentators.isEmpty &&
-                    chazalGroup.commentators.isNotEmpty &&
-                    acharonimGroup.commentators.isNotEmpty) ||
-                (rishonimGroup.commentators.isEmpty &&
-                    chazalGroup.commentators.isEmpty &&
-                    tanachGroup.commentators.isNotEmpty &&
-                    acharonimGroup.commentators.isNotEmpty))
+            ..._buildGroup('הראשונים', rishonim, state),
+            if ((rishonim.isNotEmpty && acharonim.isNotEmpty) ||
+                (rishonim.isEmpty &&
+                    chazal.isNotEmpty &&
+                    acharonim.isNotEmpty) ||
+                (rishonim.isEmpty &&
+                    chazal.isEmpty &&
+                    torahShebichtav.isNotEmpty &&
+                    acharonim.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup(
-                acharonimGroup.title, acharonimGroup.commentators, state),
-            if ((acharonimGroup.commentators.isNotEmpty &&
-                    modernGroup.commentators.isNotEmpty) ||
-                (acharonimGroup.commentators.isEmpty &&
-                    rishonimGroup.commentators.isNotEmpty &&
-                    modernGroup.commentators.isNotEmpty) ||
-                (acharonimGroup.commentators.isEmpty &&
-                    rishonimGroup.commentators.isEmpty &&
-                    chazalGroup.commentators.isNotEmpty &&
-                    modernGroup.commentators.isNotEmpty) ||
-                (acharonimGroup.commentators.isEmpty &&
-                    rishonimGroup.commentators.isEmpty &&
-                    chazalGroup.commentators.isEmpty &&
-                    tanachGroup.commentators.isNotEmpty &&
-                    modernGroup.commentators.isNotEmpty))
+            ..._buildGroup('האחרונים', acharonim, state),
+            if ((acharonim.isNotEmpty && modernCommentators.isNotEmpty) ||
+                (acharonim.isEmpty &&
+                    rishonim.isNotEmpty &&
+                    modernCommentators.isNotEmpty) ||
+                (acharonim.isEmpty &&
+                    rishonim.isEmpty &&
+                    chazal.isNotEmpty &&
+                    modernCommentators.isNotEmpty) ||
+                (acharonim.isEmpty &&
+                    rishonim.isEmpty &&
+                    chazal.isEmpty &&
+                    torahShebichtav.isNotEmpty &&
+                    modernCommentators.isNotEmpty))
               const ctx.MenuDivider(),
-            ..._buildGroup(modernGroup.title, modernGroup.commentators, state),
-            if ((tanachGroup.commentators.isNotEmpty ||
-                    chazalGroup.commentators.isNotEmpty ||
-                    rishonimGroup.commentators.isNotEmpty ||
-                    acharonimGroup.commentators.isNotEmpty ||
-                    modernGroup.commentators.isNotEmpty) &&
+            ..._buildGroup('מחברי זמננו', modernCommentators, state),
+            if ((torahShebichtav.isNotEmpty ||
+                    chazal.isNotEmpty ||
+                    rishonim.isNotEmpty ||
+                    acharonim.isNotEmpty ||
+                    modernCommentators.isNotEmpty) &&
                 ungrouped.isNotEmpty)
               const ctx.MenuDivider(),
-            ..._buildGroup(ungroupedGroup.title, ungrouped, state),
+            ..._buildGroup('שאר המפרשים', ungrouped, state),
           ],
         ),
-        ctx.MenuItem.submenu(
-          label: 'קישורים',
-          enabled: state.visibleLinks.isNotEmpty,
-          items: state.visibleLinks
-              .map(
-                (link) => ctx.MenuItem(
-                  label: link.heRef,
-                  onSelected: () {
-                    widget.openBookCallback(
-                      TextBookTab(
-                        book: TextBook(
-                          title: utils.getTitleFromPath(link.path2),
-                        ),
-                        index: link.index2 - 1,
-                        openLeftPane:
-                            (Settings.getValue<bool>('key-pin-sidebar') ??
-                                    false) ||
-                                (Settings.getValue<bool>(
-                                        'key-default-sidebar-open') ??
-                                    false),
-                      ),
-                    );
-                  },
-                ),
-              )
-              .toList(),
-        ),
+        // ctx.MenuItem.submenu(
+        //   label: 'קישורים',
+        //   enabled: false,
+        //   items: [],
+        // ),
         const ctx.MenuDivider(),
         // הערות אישיות
         ctx.MenuItem(
@@ -351,7 +298,9 @@ class _CombinedViewState extends State<CombinedView> {
     // נשתמש בבחירה האחרונה שנשמרה, או בבחירה הנוכחית
     final text = _lastSelectedText ?? _selectedText;
     if (text == null || text.trim().isEmpty) {
-      UiSnack.show('אנא בחר טקסט ליצירת הערה אישית');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('אנא בחר טקסט ליצירת הערה אישית')),
+      );
       return;
     }
 
@@ -540,18 +489,17 @@ $textWithBreaks
           );
         }
 
-        // שימוש בפונקציית העזר החדשה להעתקה
-        await CopyUtils.copyStyledToClipboard(
-          plainText: finalPlainText,
-          htmlText: htmlContentToUse,
-          fontFamily: settingsState.fontFamily,
-          fontSize: widget.textSize,
-        );
+        // העתקה פשוטה
+        final item = DataWriterItem();
+        item.add(Formats.plainText(finalPlainText));
+        item.add(Formats.htmlText(htmlContentToUse));
+        await clipboard.write([item]);
       }
     } catch (e) {
       if (mounted) {
-        UiSnack.showError('שגיאה בהעתקה מעוצבת: $e',
-            backgroundColor: Theme.of(context).colorScheme.error);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('שגיאה בהעתקה מעוצבת: $e')),
+        );
       }
     }
   }
@@ -590,12 +538,16 @@ $textWithBreaks
                   !currentState.showNotesSidebar) {
                 textBookBloc.add(const ToggleNotesSidebar());
               }
-              UiSnack.show(UiSnack.noteCreated);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('ההערה נוצרה בהצלחה')),
+              );
             }
           } catch (e) {
             if (mounted) {
               // Dialog is already closed by NoteEditorDialog
-              UiSnack.showError('שגיאה ביצירת הערה: $e');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('שגיאה ביצירת הערה: $e')),
+              );
             }
           }
         },
@@ -660,7 +612,6 @@ $textWithBreaks
   Widget buildOuterList(TextBookLoaded state) {
     return ScrollablePositionedList.builder(
       key: ValueKey('combined-${widget.tab.book.title}'),
-      initialScrollIndex: widget.tab.index,
       itemPositionsListener: widget.tab.positionsListener,
       itemScrollController: widget.tab.scrollController,
       scrollOffsetController: widget.tab.mainOffsetController,
@@ -677,111 +628,89 @@ $textWithBreaks
     int index,
     TextBookLoaded state,
   ) {
-    final isSelected = state.selectedIndex == index;
-
-    // סנכרון ה-controller עם המצב - אם צריך להיות פתוח אבל סגור, פותחים אותו
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (isSelected && !controller.isExpanded) {
-        controller.expand();
-      } else if (!isSelected && controller.isExpanded) {
-        controller.collapse();
-      }
-    });
-
     // עוטפים את כל ה־ExpansionTile בתפריט קונטקסט ספציפי לאינדקס הנוכחי:
     return ctx.ContextMenuRegion(
       contextMenu: _buildContextMenuForIndex(state, index),
-      child: Container(
-        // רקע אחיד לשורה כולה - בלי שכבות מרובות
-        decoration: isSelected
-            ? BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withValues(alpha: 0.08),
-              )
-            : null,
-        child: Theme(
-          data: Theme.of(context).copyWith(
-            splashColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-          ),
-          child: ExpansionTile(
-            shape: const Border(),
-            controller: controller,
-            key: PageStorageKey(widget.data[index]),
-            iconColor: Colors.transparent,
-            tilePadding: const EdgeInsets.all(0.0),
-            collapsedIconColor: Colors.transparent,
-            // הסרת כל הצבעים והאפקטים מה-ExpansionTile - נשתמש רק ב-Container למעלה
-            backgroundColor: Colors.transparent,
-            collapsedBackgroundColor: Colors.transparent,
-            // ביטול אפקטי hover ו-splash
-            visualDensity: VisualDensity.compact,
-            onExpansionChanged: (expanded) {
-              // עדכון המצב בהתאם למצב החדש של ה-ExpansionTile
-              if (expanded) {
-                _textBookBloc.add(UpdateSelectedIndex(index));
-              } else {
-                _textBookBloc.add(const UpdateSelectedIndex(null));
-              }
-            },
-            title: Padding(
-              // padding קטן לעיצוב
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  BlocBuilder<SettingsBloc, SettingsState>(
-                    builder: (context, settingsState) {
-                      String data = widget.data[index];
-                      if (!settingsState.showTeamim) {
-                        data = utils.removeTeamim(data);
-                      }
-                      if (settingsState.replaceHolyNames) {
-                        data = utils.replaceHolyNames(data);
-                      }
-
-                      return HtmlWidget(
-                        '''
-                        <div style="text-align: justify; direction: rtl;">
-                          ${() {
-                          String processedData = state.removeNikud
-                              ? utils.highLight(utils.removeVolwels('$data\n'),
-                                  state.searchText)
-                              : utils.highLight('$data\n', state.searchText);
-                          // החלת עיצוב הסוגריים העגולים
-                          return utils.formatTextWithParentheses(processedData);
-                        }()}
-                        </div>
-                        ''',
-                        textStyle: TextStyle(
-                          fontSize: widget.textSize,
-                          fontFamily: settingsState.fontFamily,
-                          height: 1.5,
-                        ),
-                        onTapUrl: (url) async {
-                          return await HtmlLinkHandler.handleLink(context, url, widget.openBookCallback);
-                        },
-                      );
-                    },
-                  ),
-                ],
+      child: ExpansionTile(
+        shape: const Border(),
+        controller: controller,
+        key: PageStorageKey(widget.data[index]),
+        iconColor: Colors.transparent,
+        tilePadding: const EdgeInsets.all(0.0),
+        collapsedIconColor: Colors.transparent,
+        title: BlocBuilder<SettingsBloc, SettingsState>(
+          builder: (context, settingsState) {
+            String data = widget.data[index];
+            if (!settingsState.showTeamim) {
+              data = utils.removeTeamim(data);
+            }
+            if (settingsState.replaceHolyNames) {
+              data = utils.replaceHolyNames(data);
+            }
+            return HtmlWidget(
+              '''
+              <div style="text-align: justify; direction: rtl;">
+                ${() {
+                String processedData = state.removeNikud
+                    ? utils.highLight(
+                        utils.removeVolwels('$data\n'), state.searchText)
+                    : utils.highLight('$data\n', state.searchText);
+                // החלת עיצוב הסוגריים העגולים
+                processedData = utils.formatTextWithParentheses(processedData);
+                return processedData;
+              }()}
+              </div>
+              ''',
+              textStyle: TextStyle(
+                fontSize: widget.textSize,
+                fontFamily: settingsState.fontFamily,
+                height: 1.5,
               ),
-            ),
-            children: [
-              widget.showCommentaryAsExpansionTiles
-                  ? CommentaryListBase(
-                      indexes: [index],
-                      fontSize: widget.textSize,
-                      openBookCallback: widget.openBookCallback,
-                      showSearch: false,
-                    )
-                  : const SizedBox.shrink(),
-            ],
-          ),
+              onTapUrl: (url) async {
+                return await HtmlLinkHandler.handleLink(context, url, widget.openBookCallback);
+              },
+              customWidgetBuilder: (element) {
+                if (element.localName == 'a') {
+                  final href = element.attributes['href'];
+                  if (href != null && (href.startsWith('book://') || href.startsWith('#'))) {
+                    return GestureDetector(
+                      onLongPress: () {
+                        // תמיכה במגע ארוך למובייל
+                        final RenderBox renderBox = context.findRenderObject() as RenderBox;
+                        final position = renderBox.localToGlobal(Offset.zero);
+                        HtmlLinkHandler.showPreview(
+                          context,
+                          href,
+                          position + const Offset(100, 100), // מיקום קבוע למובייל
+                        );
+                      },
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        onEnter: (event) {
+                          HtmlLinkHandler.showPreview(
+                            context,
+                            href,
+                            event.position,
+                          );
+                        },
+                        onExit: (_) {
+                          // נשאיר את התצוגה המקדימה פתוחה עד שהמשתמש ילחץ מחוץ לה
+                        },
+                        child: null, // נחזיר null כדי שה-HtmlWidget יבנה את הקישור בעצמו
+                      ),
+                    );
+                  }
+                }
+                return null;
+              },
+            );
+          },
         ),
+        children: [
+          widget.showCommentaryAsExpansionTiles
+              ? const SizedBox.shrink() // נסיר את CommentaryListBase לעת עתה
+              : const SizedBox.shrink(),
+        ],
       ),
     );
   }
@@ -824,7 +753,7 @@ $textWithBreaks
   /// Opens the text editor for a specific paragraph
   void _editParagraph(int paragraphIndex) {
     if (paragraphIndex >= 0 && paragraphIndex < widget.data.length) {
-      context.read<TextBookBloc>().add(OpenEditor(index: paragraphIndex));
+      // context.read<TextBookBloc>().add(OpenEditor(index: paragraphIndex)); // נסיר לעת עתה
     }
   }
 }
@@ -846,7 +775,9 @@ class _NotesSection extends StatelessWidget {
       onClose: onClose,
       onNavigateToPosition: (start, end) {
         // ניווט למיקום ההערה בטקסט
-        UiSnack.show('ניווט למיקום $start-$end');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('ניווט למיקום $start-$end')),
+        );
       },
     );
   }
