@@ -22,6 +22,7 @@ class SettingsState extends Equatable {
   final double facetFilteringWidth;
   final String copyWithHeaders;
   final String copyHeaderFormat;
+  final bool enableAutoLinks;
 
   const SettingsState({
     required this.isDarkMode,
@@ -44,6 +45,7 @@ class SettingsState extends Equatable {
     required this.facetFilteringWidth,
     required this.copyWithHeaders,
     required this.copyHeaderFormat,
+    required this.enableAutoLinks,
   });
 
   factory SettingsState.initial() {
@@ -68,6 +70,7 @@ class SettingsState extends Equatable {
       facetFilteringWidth: 235,
       copyWithHeaders: 'none',
       copyHeaderFormat: 'same_line_after_brackets',
+      enableAutoLinks: true,
     );
   }
 
@@ -92,6 +95,7 @@ class SettingsState extends Equatable {
     double? facetFilteringWidth,
     String? copyWithHeaders,
     String? copyHeaderFormat,
+    bool? enableAutoLinks,
   }) {
     return SettingsState(
       isDarkMode: isDarkMode ?? this.isDarkMode,
@@ -115,6 +119,7 @@ class SettingsState extends Equatable {
       facetFilteringWidth: facetFilteringWidth ?? this.facetFilteringWidth,
       copyWithHeaders: copyWithHeaders ?? this.copyWithHeaders,
       copyHeaderFormat: copyHeaderFormat ?? this.copyHeaderFormat,
+      enableAutoLinks: enableAutoLinks ?? this.enableAutoLinks,
     );
   }
 
@@ -140,5 +145,6 @@ class SettingsState extends Equatable {
         facetFilteringWidth,
         copyWithHeaders,
         copyHeaderFormat,
+        enableAutoLinks,
       ];
 }

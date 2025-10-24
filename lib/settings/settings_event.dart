@@ -189,3 +189,12 @@ class UpdateCopyHeaderFormat extends SettingsEvent {
   @override
   List<Object?> get props => [copyHeaderFormat];
 }
+
+class UpdateEnableAutoLinks extends SettingsEvent {
+  final bool enableAutoLinks;
+
+  const UpdateEnableAutoLinks(this.enableAutoLinks);
+
+  @override
+  List<Object?> get props => [enableAutoLinks];
+}
