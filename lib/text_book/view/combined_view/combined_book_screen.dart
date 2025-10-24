@@ -425,7 +425,9 @@ $textWithBreaks
   Future<void> _copyFormattedText() async {
     final plainText = _lastSelectedText ?? _selectedText;
     if (plainText == null || plainText.trim().isEmpty) {
-      UiSnack.show('אנא בחר טקסט להעתקה');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('אנא בחר טקסט להעתקה')),
+      );
       return;
     }
 
