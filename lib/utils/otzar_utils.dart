@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 
 import 'package:path/path.dart' as path;
 import 'package:url_launcher/url_launcher_string.dart';
@@ -40,6 +41,12 @@ class OtzarUtils {
       if (await bookFile.exists()) {
         return true;
       }
+      //newer version teh path is under the /Otzardisk/books folder with the extension .book
+      final bookPathLocalDisk = '$drive:\\Otzardisk\\books\\$bookId.book';
+      final bookFileLocalDisk = File( bookPathLocalDisk);
+      if (await bookFileLocalDisk.exists()) {
+        return true;
+      }
 
       final zipPath = '$drive:\\zip';
 
@@ -57,7 +64,7 @@ class OtzarUtils {
         continue;
       }
     }
-    print('Book $bookId not found in any "<drive>" <book> folder');
+    debugPrint('Book $bookId not found in any "<drive>" <book> folder');
     return false;
   }
 
