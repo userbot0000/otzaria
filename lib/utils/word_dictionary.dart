@@ -9,150 +9,47 @@ class WordDictionary {
   WordDictionary._();
   
   Map<String, WordLink>? _dictionary;
+  List<String>? _tractates;
   
   /// טוען את המילון מקובץ JSON
   Future<void> loadDictionary() async {
-    if (_dictionary != null) return;
+    if (_tractates != null) return;
     
     try {
       // ניסיון לטעון מקובץ assets
       final String jsonString = await rootBundle.loadString('assets/word_dictionary.json');
       final Map<String, dynamic> jsonData = json.decode(jsonString);
       
+      if (jsonData.containsKey('tractates')) {
+        _tractates = List<String>.from(jsonData['tractates']);
+      } else {
+        _tractates = _getDefaultTractates();
+      }
+      
+      // יצירת מילון ריק - לא נשתמש בו יותר
       _dictionary = {};
-      jsonData.forEach((word, linkData) {
-        _dictionary![word] = WordLink.fromJson(linkData);
-      });
     } catch (e) {
-      // אם הקובץ לא קיים, ניצור מילון ברירת מחדל
-      _dictionary = _createDefaultDictionary();
+      // אם הקובץ לא קיים, נשתמש ברשימת מסכתות ברירת מחדל
+      _tractates = _getDefaultTractates();
+      _dictionary = {};
     }
   }
   
-  /// יוצר מילון ברירת מחדל עם מילים נפוצות
-  Map<String, WordLink> _createDefaultDictionary() {
-    return {
-      // מסכתות תלמוד
-      'ברכות': WordLink(
-        bookTitle: 'ברכות',
-        type: LinkType.book,
-        description: 'מסכת ברכות',
-      ),
-      'שבת': WordLink(
-        bookTitle: 'שבת',
-        type: LinkType.book,
-        description: 'מסכת שבת',
-      ),
-      'עירובין': WordLink(
-        bookTitle: 'עירובין',
-        type: LinkType.book,
-        description: 'מסכת עירובין',
-      ),
-      'פסחים': WordLink(
-        bookTitle: 'פסחים',
-        type: LinkType.book,
-        description: 'מסכת פסחים',
-      ),
-      'יומא': WordLink(
-        bookTitle: 'יומא',
-        type: LinkType.book,
-        description: 'מסכת יומא',
-      ),
-      'סוכה': WordLink(
-        bookTitle: 'סוכה',
-        type: LinkType.book,
-        description: 'מסכת סוכה',
-      ),
-      'ביצה': WordLink(
-        bookTitle: 'ביצה',
-        type: LinkType.book,
-        description: 'מסכת ביצה',
-      ),
-      'ראש השנה': WordLink(
-        bookTitle: 'ראש השנה',
-        type: LinkType.book,
-        description: 'מסכת ראש השנה',
-      ),
-      'תענית': WordLink(
-        bookTitle: 'תענית',
-        type: LinkType.book,
-        description: 'מסכת תענית',
-      ),
-      'מגילה': WordLink(
-        bookTitle: 'מגילה',
-        type: LinkType.book,
-        description: 'מסכת מגילה',
-      ),
-      
-      // פרשנים
-      'רש"י': WordLink(
-        bookTitle: 'רש"י',
-        type: LinkType.commentary,
-        description: 'פירוש רש"י',
-      ),
-      'תוספות': WordLink(
-        bookTitle: 'תוספות',
-        type: LinkType.commentary,
-        description: 'פירוש התוספות',
-      ),
-      'רמב"ם': WordLink(
-        bookTitle: 'רמב"ם',
-        type: LinkType.book,
-        description: 'הרמב"ם',
-      ),
-      'שולחן ערוך': WordLink(
-        bookTitle: 'שולחן ערוך',
-        type: LinkType.book,
-        description: 'שולחן ערוך',
-      ),
-      
-      // ספרי תנ"ך
-      'בראשית': WordLink(
-        bookTitle: 'בראשית',
-        type: LinkType.book,
-        description: 'ספר בראשית',
-      ),
-      'שמות': WordLink(
-        bookTitle: 'שמות',
-        type: LinkType.book,
-        description: 'ספר שמות',
-      ),
-      'ויקרא': WordLink(
-        bookTitle: 'ויקרא',
-        type: LinkType.book,
-        description: 'ספר ויקרא',
-      ),
-      'במדבר': WordLink(
-        bookTitle: 'במדבר',
-        type: LinkType.book,
-        description: 'ספר במדבר',
-      ),
-      'דברים': WordLink(
-        bookTitle: 'דברים',
-        type: LinkType.book,
-        description: 'ספר דברים',
-      ),
-      
-      // מושגים נפוצים
-      'הלכה': WordLink(
-        bookTitle: 'הלכה',
-        type: LinkType.concept,
-        description: 'מושג ההלכה',
-        searchQuery: 'הלכה',
-      ),
-      'אגדה': WordLink(
-        bookTitle: 'אגדה',
-        type: LinkType.concept,
-        description: 'מושג האגדה',
-        searchQuery: 'אגדה',
-      ),
-      'מצוה': WordLink(
-        bookTitle: 'מצוה',
-        type: LinkType.concept,
-        description: 'מושג המצוה',
-        searchQuery: 'מצוה',
-      ),
-    };
+  /// מחזיר רשימת מסכתות ברירת מחדל
+  List<String> _getDefaultTractates() {
+    return [
+      'ברכות', 'שבת', 'עירובין', 'פסחים', 'יומא', 'סוכה', 'ביצה',
+      'ראש השנה', 'תענית', 'מגילה', 'מועד קטן', 'חגיגה', 'יבמות',
+      'כתובות', 'נדרים', 'נזיר', 'סוטה', 'גיטין', 'קידושין',
+      'בבא קמא', 'בבא מציעא', 'בבא בתרא', 'סנהדרין', 'מכות',
+      'שבועות', 'עבודה זרה', 'הוריות', 'זבחים', 'מנחות', 'חולין',
+      'בכורות', 'ערכין', 'תמורה', 'כריתות', 'מעילה', 'תמיד', 'נדה'
+    ];
+  }
+  
+  /// מחזיר את רשימת המסכתות
+  List<String> getTractates() {
+    return List.from(_tractates ?? []);
   }
   
   /// מחפש קישור למילה
