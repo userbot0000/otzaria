@@ -678,40 +678,6 @@ $textWithBreaks
               onTapUrl: (url) async {
                 return await HtmlLinkHandler.handleLink(context, url, widget.openBookCallback);
               },
-              customWidgetBuilder: (element) {
-                if (element.localName == 'a') {
-                  final href = element.attributes['href'];
-                  if (href != null && (href.startsWith('book://') || href.startsWith('#'))) {
-                    return GestureDetector(
-                      onLongPress: () {
-                        // תמיכה במגע ארוך למובייל
-                        final RenderBox renderBox = context.findRenderObject() as RenderBox;
-                        final position = renderBox.localToGlobal(Offset.zero);
-                        HtmlLinkHandler.showPreview(
-                          context,
-                          href,
-                          position + const Offset(100, 100), // מיקום קבוע למובייל
-                        );
-                      },
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        onEnter: (event) {
-                          HtmlLinkHandler.showPreview(
-                            context,
-                            href,
-                            event.position,
-                          );
-                        },
-                        onExit: (_) {
-                          // נשאיר את התצוגה המקדימה פתוחה עד שהמשתמש ילחץ מחוץ לה
-                        },
-                        child: null, // נחזיר null כדי שה-HtmlWidget יבנה את הקישור בעצמו
-                      ),
-                    );
-                  }
-                }
-                return null;
-              },
             );
           },
         ),
