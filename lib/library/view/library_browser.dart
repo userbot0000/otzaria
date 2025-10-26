@@ -147,7 +147,17 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   autofocus: true,
                   decoration: InputDecoration(
                     constraints: const BoxConstraints(maxWidth: 400),
-                    prefixIcon: const Icon(Icons.search),
+                    prefixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.search),
+                        _buildTopicsFilterButton(context, state),
+                      ],
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 80,
+                      minHeight: 48,
+                    ),
                     suffixIcon: IconButton(
                       onPressed: () {
                         focusRepository.librarySearchController.clear();
@@ -195,7 +205,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
-  Widget _buildTopicsFilter(BuildContext context, LibraryState state) {
+  Widget _buildTopicsFilterButton(BuildContext context, LibraryState state) {
     if (state.currentCategory == null) {
       return const SizedBox.shrink();
     }
@@ -228,54 +238,101 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       return const SizedBox.shrink();
     }
 
+    return IconButton(
+      icon: Icon(
+        Icons.filter_list,
+        color: (state.selectedTopics?.isNotEmpty ?? false)
+            ? Theme.of(context).colorScheme.primary
+            : null,
+      ),
+      tooltip: 'סינון לפי נושאים',
+      onPressed: () => _showTopicsFilterDialog(context, state, relevantTopics),
+    );
+  }
+
+  void _showTopicsFilterDialog(BuildContext context, LibraryState state, List<String> relevantTopics) {
+    final searchController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          final filteredTopics = relevantTopics.where((topic) {
+            if (searchController.text.isEmpty) return true;
+            return topic.contains(searchController.text);
+          }).toList();
+
+          return AlertDialog(
+            title: const Text('סינון לפי נושאים'),
+            content: SizedBox(
+              width: 300,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: searchController,
+                    decoration: const InputDecoration(
+                      hintText: 'חיפוש נושא...',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) => setState(() {}),
+                  ),
+                  const SizedBox(height: 16),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: filteredTopics.map((topic) {
+                          final isSelected = state.selectedTopics?.contains(topic) ?? false;
+                          return CheckboxListTile(
+                            title: Text(topic),
+                            value: isSelected,
+                            onChanged: (bool? value) {
+                              final currentTopics = List<String>.from(state.selectedTopics ?? []);
+                              if (value == true) {
+                                if (!currentTopics.contains(topic)) {
+                                  currentTopics.add(topic);
+                                }
+                              } else {
+                                currentTopics.remove(topic);
+                              }
+                              context.read<LibraryBloc>().add(FilterBooksByTopics(currentTopics));
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              if (state.selectedTopics?.isNotEmpty ?? false)
+                TextButton(
+                  onPressed: () {
+                    context.read<LibraryBloc>().add(const FilterBooksByTopics([]));
+                  },
+                  child: const Text('נקה הכל'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('סגור'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTopicsFilter(BuildContext context, LibraryState state) {
+    if (state.currentCategory == null || (state.selectedTopics?.isEmpty ?? true)) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       child: Row(
         children: [
-          PopupMenuButton<String>(
-            icon: Icon(
-              Icons.filter_list,
-              color: (state.selectedTopics?.isNotEmpty ?? false)
-                  ? Theme.of(context).colorScheme.primary
-                  : null,
-            ),
-            tooltip: 'סינון לפי נושאים',
-            onSelected: (String topic) {
-              final currentTopics = List<String>.from(state.selectedTopics ?? []);
-              if (!currentTopics.contains(topic)) {
-                currentTopics.add(topic);
-                context.read<LibraryBloc>().add(FilterBooksByTopics(currentTopics));
-              }
-            },
-            itemBuilder: (BuildContext context) {
-              return relevantTopics.map((String topic) {
-                final isSelected = state.selectedTopics?.contains(topic) ?? false;
-                return PopupMenuItem<String>(
-                  value: topic,
-                  enabled: !isSelected,
-                  child: Row(
-                    children: [
-                      if (isSelected)
-                        Icon(
-                          Icons.check,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      if (isSelected) const SizedBox(width: 8),
-                      Text(
-                        topic,
-                        style: TextStyle(
-                          color: isSelected
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList();
-            },
-          ),
           Expanded(
             child: Wrap(
               spacing: 8.0,
