@@ -9,150 +9,84 @@ class WordDictionary {
   WordDictionary._();
   
   Map<String, WordLink>? _dictionary;
+  List<String>? _tractates;
+  List<String>? _validPageNumbers;
   
   /// טוען את המילון מקובץ JSON
   Future<void> loadDictionary() async {
-    if (_dictionary != null) return;
+    if (_tractates != null) return;
     
     try {
       // ניסיון לטעון מקובץ assets
       final String jsonString = await rootBundle.loadString('assets/word_dictionary.json');
       final Map<String, dynamic> jsonData = json.decode(jsonString);
       
+      if (jsonData.containsKey('tractates')) {
+        _tractates = List<String>.from(jsonData['tractates']);
+      } else {
+        _tractates = _getDefaultTractates();
+      }
+      
+      if (jsonData.containsKey('valid_page_numbers')) {
+        _validPageNumbers = List<String>.from(jsonData['valid_page_numbers']);
+      } else {
+        _validPageNumbers = _getDefaultValidPageNumbers();
+      }
+      
+      // יצירת מילון ריק - לא נשתמש בו יותר
       _dictionary = {};
-      jsonData.forEach((word, linkData) {
-        _dictionary![word] = WordLink.fromJson(linkData);
-      });
     } catch (e) {
-      // אם הקובץ לא קיים, ניצור מילון ברירת מחדל
-      _dictionary = _createDefaultDictionary();
+      // אם הקובץ לא קיים, נשתמש ברשימת מסכתות ברירת מחדל
+      _tractates = _getDefaultTractates();
+      _validPageNumbers = _getDefaultValidPageNumbers();
+      _dictionary = {};
     }
   }
   
-  /// יוצר מילון ברירת מחדל עם מילים נפוצות
-  Map<String, WordLink> _createDefaultDictionary() {
-    return {
-      // מסכתות תלמוד
-      'ברכות': WordLink(
-        bookTitle: 'ברכות',
-        type: LinkType.book,
-        description: 'מסכת ברכות',
-      ),
-      'שבת': WordLink(
-        bookTitle: 'שבת',
-        type: LinkType.book,
-        description: 'מסכת שבת',
-      ),
-      'עירובין': WordLink(
-        bookTitle: 'עירובין',
-        type: LinkType.book,
-        description: 'מסכת עירובין',
-      ),
-      'פסחים': WordLink(
-        bookTitle: 'פסחים',
-        type: LinkType.book,
-        description: 'מסכת פסחים',
-      ),
-      'יומא': WordLink(
-        bookTitle: 'יומא',
-        type: LinkType.book,
-        description: 'מסכת יומא',
-      ),
-      'סוכה': WordLink(
-        bookTitle: 'סוכה',
-        type: LinkType.book,
-        description: 'מסכת סוכה',
-      ),
-      'ביצה': WordLink(
-        bookTitle: 'ביצה',
-        type: LinkType.book,
-        description: 'מסכת ביצה',
-      ),
-      'ראש השנה': WordLink(
-        bookTitle: 'ראש השנה',
-        type: LinkType.book,
-        description: 'מסכת ראש השנה',
-      ),
-      'תענית': WordLink(
-        bookTitle: 'תענית',
-        type: LinkType.book,
-        description: 'מסכת תענית',
-      ),
-      'מגילה': WordLink(
-        bookTitle: 'מגילה',
-        type: LinkType.book,
-        description: 'מסכת מגילה',
-      ),
-      
-      // פרשנים
-      'רש"י': WordLink(
-        bookTitle: 'רש"י',
-        type: LinkType.commentary,
-        description: 'פירוש רש"י',
-      ),
-      'תוספות': WordLink(
-        bookTitle: 'תוספות',
-        type: LinkType.commentary,
-        description: 'פירוש התוספות',
-      ),
-      'רמב"ם': WordLink(
-        bookTitle: 'רמב"ם',
-        type: LinkType.book,
-        description: 'הרמב"ם',
-      ),
-      'שולחן ערוך': WordLink(
-        bookTitle: 'שולחן ערוך',
-        type: LinkType.book,
-        description: 'שולחן ערוך',
-      ),
-      
-      // ספרי תנ"ך
-      'בראשית': WordLink(
-        bookTitle: 'בראשית',
-        type: LinkType.book,
-        description: 'ספר בראשית',
-      ),
-      'שמות': WordLink(
-        bookTitle: 'שמות',
-        type: LinkType.book,
-        description: 'ספר שמות',
-      ),
-      'ויקרא': WordLink(
-        bookTitle: 'ויקרא',
-        type: LinkType.book,
-        description: 'ספר ויקרא',
-      ),
-      'במדבר': WordLink(
-        bookTitle: 'במדבר',
-        type: LinkType.book,
-        description: 'ספר במדבר',
-      ),
-      'דברים': WordLink(
-        bookTitle: 'דברים',
-        type: LinkType.book,
-        description: 'ספר דברים',
-      ),
-      
-      // מושגים נפוצים
-      'הלכה': WordLink(
-        bookTitle: 'הלכה',
-        type: LinkType.concept,
-        description: 'מושג ההלכה',
-        searchQuery: 'הלכה',
-      ),
-      'אגדה': WordLink(
-        bookTitle: 'אגדה',
-        type: LinkType.concept,
-        description: 'מושג האגדה',
-        searchQuery: 'אגדה',
-      ),
-      'מצוה': WordLink(
-        bookTitle: 'מצוה',
-        type: LinkType.concept,
-        description: 'מושג המצוה',
-        searchQuery: 'מצוה',
-      ),
-    };
+  /// מחזיר רשימת מסכתות ברירת מחדל
+  List<String> _getDefaultTractates() {
+    return [
+      'ברכות', 'שבת', 'עירובין', 'פסחים', 'יומא', 'סוכה', 'ביצה',
+      'ראש השנה', 'תענית', 'מגילה', 'מועד קטן', 'חגיגה', 'יבמות',
+      'כתובות', 'נדרים', 'נזיר', 'סוטה', 'גיטין', 'קידושין',
+      'בבא קמא', 'בבא מציעא', 'בבא בתרא', 'סנהדרין', 'מכות',
+      'שבועות', 'עבודה זרה', 'הוריות', 'זבחים', 'מנחות', 'חולין',
+      'בכורות', 'ערכין', 'תמורה', 'כריתות', 'מעילה', 'תמיד', 'נדה'
+    ];
+  }
+  
+  /// מחזיר רשימת מספרי דפים תקינים ברירת מחדל (א-קעז)
+  List<String> _getDefaultValidPageNumbers() {
+    return [
+      'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י',
+      'יא', 'יב', 'יג', 'יד', 'טו', 'טז', 'יז', 'יח', 'יט', 'כ',
+      'כא', 'כב', 'כג', 'כד', 'כה', 'כו', 'כז', 'כח', 'כט', 'ל',
+      'לא', 'לב', 'לג', 'לד', 'לה', 'לו', 'לז', 'לח', 'לט', 'מ',
+      'מא', 'מב', 'מג', 'מד', 'מה', 'מו', 'מז', 'מח', 'מט', 'נ',
+      'נא', 'נב', 'נג', 'נד', 'נה', 'נו', 'נז', 'נח', 'נט', 'ס',
+      'סא', 'סב', 'סג', 'סד', 'סה', 'סו', 'סז', 'סח', 'סט', 'ע',
+      'עא', 'עב', 'עג', 'עד', 'עה', 'עו', 'עז', 'עח', 'עט', 'פ',
+      'פא', 'פב', 'פג', 'פד', 'פה', 'פו', 'פז', 'פח', 'פט', 'צ',
+      'צא', 'צב', 'צג', 'צד', 'צה', 'צו', 'צז', 'צח', 'צט', 'ק',
+      'קא', 'קב', 'קג', 'קד', 'קה', 'קו', 'קז', 'קח', 'קט', 'קי',
+      'קיא', 'קיב', 'קיג', 'קיד', 'קטו', 'קטז', 'קיז', 'קיח', 'קיט', 'קכ',
+      'קכא', 'קכב', 'קכג', 'קכד', 'קכה', 'קכו', 'קכז', 'קכח', 'קכט', 'קל',
+      'קלא', 'קלב', 'קלג', 'קלד', 'קלה', 'קלו', 'קלז', 'קלח', 'קלט', 'קמ',
+      'קמא', 'קמב', 'קמג', 'קמד', 'קמה', 'קמו', 'קמז', 'קמח', 'קמט', 'קן',
+      'קנא', 'קנב', 'קנג', 'קנד', 'קנה', 'קנו', 'קנז', 'קנח', 'קנט', 'קס',
+      'קסא', 'קסב', 'קסג', 'קסד', 'קסה', 'קסו', 'קסז', 'קסח', 'קסט', 'קע',
+      'קעא', 'קעב', 'קעג', 'קעד', 'קעה', 'קעו', 'קעז'
+    ];
+  }
+
+  /// מחזיר את רשימת המסכתות
+  List<String> getTractates() {
+    return List.from(_tractates ?? []);
+  }
+  
+  /// מחזיר את רשימת מספרי הדפים התקינים
+  List<String> getValidPageNumbers() {
+    return List.from(_validPageNumbers ?? []);
   }
   
   /// מחפש קישור למילה

@@ -13,7 +13,10 @@ class AutoLinkProcessor {
   Future<void> initialize() async {
     if (_initialized) return;
     
+    print('AutoLinkProcessor: Starting initialization...');
     await WordDictionary.instance.loadDictionary();
+    final wordCount = WordDictionary.instance.getAllWords().length;
+    print('AutoLinkProcessor: Initialized with $wordCount words');
     _initialized = true;
   }
   
@@ -23,54 +26,143 @@ class AutoLinkProcessor {
     bool enableAutoLinks = true,
     bool excludeExistingLinks = true,
   }) {
-    if (!enableAutoLinks || !_initialized) {
+    if (!enableAutoLinks) {
       return htmlText;
     }
     
-    // אם הטקסט כבר מכיל קישורים ואנחנו רוצים לא לגעת בהם
-    if (excludeExistingLinks && htmlText.contains('<a ')) {
-      return _processTextWithExistingLinks(htmlText);
+    // אם לא מאותחל, לא נעשה כלום
+    if (!_initialized) {
+      return htmlText;
     }
     
-    return _processTextSimple(htmlText);
-  }
-  
-  /// מעבד טקסט פשוט ללא קישורים קיימים
-  String _processTextSimple(String htmlText) {
-    String result = htmlText;
-    final dictionary = WordDictionary.instance.getAllWords();
-    
-    // עובר על כל המילים במילון
-    dictionary.forEach((word, link) {
-      // בונה ביטוי רגולרי בהתאם להגדרות
-      String pattern;
-      if (link.wholeWordOnly) {
-        // התאמה למילה שלמה בלבד
-        pattern = '\\b$word\\b';
-      } else {
-        // התאמה חלקית
-        pattern = word;
-      }
-      
-      final regex = RegExp(
-        pattern,
-        caseSensitive: link.caseSensitive,
-        unicode: true,
-      );
-      
-      // מחליף את המילה בקישור
-      result = result.replaceAllMapped(regex, (match) {
-        final matchedText = match.group(0)!;
-        final url = link.createUrl();
-        return '<a href="$url" class="auto-link">$matchedText</a>';
-      });
-    });
+    // קודם כל, נזהה הפניות תלמודיות (מסכת+דף+עמוד)
+    String result = _processTalmudReferences(htmlText, excludeExistingLinks);
     
     return result;
   }
   
-  /// מעבד טקסט עם קישורים קיימים (לא נוגע בתוכן של תגי <a>)
-  String _processTextWithExistingLinks(String htmlText) {
+  /// מזהה ומקשר הפניות תלמודיות בפורמטים שונים
+  String _processTalmudReferences(String htmlText, bool excludeExistingLinks) {
+    try {
+      // אם הטקסט כבר מכיל קישורים, נפצל ונעבד רק חלקים ללא קישורים
+      if (excludeExistingLinks && htmlText.contains('<a ')) {
+        return _processTalmudWithExistingLinks(htmlText);
+      }
+      
+      final tractates = WordDictionary.instance.getTractates();
+      if (tractates.isEmpty) return htmlText;
+      
+      // בניית regex לזיהוי כל הפורמטים
+      final tractatePattern = tractates.map((t) => RegExp.escape(t)).join('|');
+      
+      // דפוס מקיף עם תמיכה בתחיליות, גרשיים, ניקוד וסימני פיסוק
+      // תחיליות אופציונליות: ב, ד, וב לפני שם המסכת
+      // מספר דף: תומך בגרשיים (כ"ג) ובמספרים עבריים עד קעז
+      // התעלמות מסימני פיסוק וניקוד בתוך התבנית
+      final pattern = RegExp(
+        "(?:^|[\\s\\(\\[\\{\"'])" +  // התחלה: תחילת מחרוזת או רווח/סוגריים/מרכאות
+        "(?:[בדו]?ב?)?\\s*" +  // תחיליות אופציונליות: ב, ד, וב
+        '(' + tractatePattern + ')' +  // שם המסכת
+        "(?![א-ת])" +  // וידוא שאחרי שם המסכת אין אות עברית נוספת (מילה שלמה)
+        "[\\s\\u0591-\\u05C7]*" +  // רווחים וניקוד אופציונליים
+        "(?:[\\(\\[])?" +  // סוגר פותח אופציונלי
+        "[\\s\\u0591-\\u05C7]*" +  // רווחים וניקוד אופציונליים
+        "(?:(דף)[\\s\\u0591-\\u05C7]+)?" +  // "דף" אופציונלי עם רווחים וניקוד
+        "([א-ת]{1,3}(?:[\"']\\s*[א-ת])?)" +  // מספר דף: תומך בגרשיים (כ"ג)
+        "[\\s\\u0591-\\u05C7,;:]*" +  // רווחים, ניקוד, פסיקים אופציונליים
+        "(?:[\\(\\[])?" +  // סוגר פותח אופציונלי
+        "[\\s\\u0591-\\u05C7]*" +  // רווחים וניקוד אופציונליים
+        "([א-ב]|ע[\"']\\s*[אב])?" +  // עמוד: א, ב, ע"א, ע"ב
+        "[\\s\\u0591-\\u05C7]*" +  // רווחים וניקוד אופציונליים
+        "(?:[\\)\\]])?" +  // סוגר סוגר אופציונלי
+        "(?=[\\s\\.\\,\\;\\:\\!\\?\\)\\]\\}\"']|\$)",  // סוף: רווח/סימנים/סוף מחרוזת
+        unicode: true,
+        multiLine: true,
+      );
+      
+      String result = htmlText;
+      result = result.replaceAllMapped(pattern, (match) {
+        // בדיקה שזה לא בתוך קישור קיים
+        final beforeMatch = result.substring(0, match.start);
+        if (beforeMatch.contains('<a ') && 
+            beforeMatch.lastIndexOf('<a ') > beforeMatch.lastIndexOf('</a>')) {
+          return match.group(0)!;
+        }
+        
+        final fullMatch = match.group(0)!;
+        final tractate = match.group(1)!;
+        final hasDafWord = match.group(2) != null;
+        String pageNum = match.group(3)!;
+        final sideStr = match.group(4);
+        
+        // ניקוי גרשיים ורווחים ממספר הדף
+        pageNum = _cleanPageNumber(pageNum);
+        
+        // בדיקה שמספר הדף תקין
+        if (!_isValidPageNumber(pageNum)) {
+          return fullMatch;
+        }
+        
+        // קביעת העמוד - ניקוי גרשיים וזיהוי ע"א/ע"ב
+        String? side;
+        if (sideStr != null) {
+          final cleanSide = sideStr.replaceAll(RegExp("[\"'\\s]"), '');
+          if (cleanSide == 'עא') {
+            side = 'א';
+          } else if (cleanSide == 'עב') {
+            side = 'ב';
+          } else if (sideStr == 'א' || sideStr == 'ב') {
+            side = sideStr;
+          }
+        }
+        
+        // בניית URL פשוט: רק ספר + דף (+ עמוד אם יש)
+        String url;
+        if (side != null) {
+          url = 'book://$tractate#$pageNum $side';
+        } else {
+          url = 'book://$tractate#$pageNum';
+        }
+        
+        // החזרת הטקסט המקורי עם קישור
+        final linkText = fullMatch.trim();
+        return '<a href="$url" class="talmud-ref">$linkText</a>';
+      });
+      
+      return result;
+    } catch (e) {
+      print('Error in _processTalmudReferences: $e');
+      return htmlText;
+    }
+  }
+  
+  /// מנקה מספר דף מגרשיים ורווחים (כ"ג -> כג)
+  String _cleanPageNumber(String pageNum) {
+    return pageNum.replaceAll(RegExp("[\"'\\s]"), '');
+  }
+  
+  /// בודק אם מחרוזת היא מספר דף תקין
+  bool _isValidPageNumber(String pageNum) {
+    // קבלת רשימת מספרי הדפים התקינים מהמילון
+    final validPages = WordDictionary.instance.getValidPageNumbers();
+    
+    // בדיקה אם זה מספר עברי תקין
+    if (validPages.contains(pageNum)) {
+      return true;
+    }
+    
+    // בדיקה אם זה מספר ערבי (1-120 בערך)
+    final numPattern = RegExp(r'^[0-9]+$');
+    if (numPattern.hasMatch(pageNum)) {
+      final num = int.tryParse(pageNum);
+      return num != null && num >= 1 && num <= 120;
+    }
+    
+    return false;
+  }
+  
+  /// מעבד טקסט עם קישורים קיימים - לא נוגע בתוכן של תגי <a>
+  String _processTalmudWithExistingLinks(String htmlText) {
     final buffer = StringBuffer();
     int lastIndex = 0;
     
@@ -81,7 +173,7 @@ class AutoLinkProcessor {
     for (final match in matches) {
       // מעבד את הטקסט לפני הקישור
       final textBefore = htmlText.substring(lastIndex, match.start);
-      buffer.write(_processTextSimple(textBefore));
+      buffer.write(_processTalmudReferences(textBefore, false));
       
       // מוסיף את הקישור הקיים כמו שהוא
       buffer.write(match.group(0));
@@ -92,7 +184,7 @@ class AutoLinkProcessor {
     // מעבד את הטקסט אחרי הקישור האחרון
     if (lastIndex < htmlText.length) {
       final textAfter = htmlText.substring(lastIndex);
-      buffer.write(_processTextSimple(textAfter));
+      buffer.write(_processTalmudReferences(textAfter, false));
     }
     
     return buffer.toString();
