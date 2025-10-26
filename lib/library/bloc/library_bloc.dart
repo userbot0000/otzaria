@@ -262,7 +262,8 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     final allBooks = currentCategory.getAllBooks();
     final filtered = allBooks.where((book) {
       final bookTopics = book.topics.split(', ').map((t) => t.trim()).toList();
-      return event.topics.any((selectedTopic) => bookTopics.contains(selectedTopic));
+      // סינון AND - הספר חייב להכיל את כל הנושאים שנבחרו
+      return event.topics.every((selectedTopic) => bookTopics.contains(selectedTopic));
     }).toList();
 
     emit(state.copyWith(
