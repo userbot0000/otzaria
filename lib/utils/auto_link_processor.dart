@@ -121,7 +121,7 @@ class AutoLinkProcessor {
         // קביעת העמוד - ניקוי גרשיים וזיהוי ע"א/ע"ב
         String? side;
         if (sideStr != null) {
-          final cleanSide = sideStr.replaceAll(RegExp("[\"'\\s]"), '');
+          final cleanSide = sideStr.replaceAll(RegExp(r'["\'\s]'), '');
           if (cleanSide == 'עא') {
             side = 'א';
           } else if (cleanSide == 'עב') {
@@ -155,7 +155,8 @@ class AutoLinkProcessor {
   
   /// מנקה מספר דף מגרשיים ורווחים (כ"ג -> כג)
   String _cleanPageNumber(String pageNum) {
-    return pageNum.replaceAll(RegExp("[\"'\\s]"), '');
+    // מסיר גרשיים ורווחים, אבל שומר על המבנה של מספרים עבריים
+    return pageNum.replaceAll(RegExp(r'["\'\s]'), '');
   }
   
   /// בודק אם מחרוזת היא מספר דף תקין
@@ -188,14 +189,31 @@ class AutoLinkProcessor {
       return true;
     }
     
-    // בדיקה אם זה מספר ערבי (1-119 בערך)
+    // בדיקה אם זה מספר ערבי (1-150 בערך)
     final numPattern = RegExp(r'^[0-9]+$');
     if (numPattern.hasMatch(chapterNum)) {
       final num = int.tryParse(chapterNum);
-      return num != null && num >= 1 && num <= 119;
+      return num != null && num >= 1 && num <= 150;
     }
     
     return false;
+  }
+
+  /// ממפה שמות ספרים חלופיים לשם הקובץ הנכון
+  String _mapBookNameToFileName(String bookName) {
+    // מיפוי שמות חלופיים לשמות קבצים
+    final Map<String, String> bookNameMapping = {
+      'תהלים': 'תהילים',  // תהלים -> תהילים
+      'שה"ש': 'שיר השירים',
+      'ש"א': 'שמואל א',
+      'ש"ב': 'שמואל ב',
+      'מ"א': 'מלכים א',
+      'מ"ב': 'מלכים ב',
+      'דה"א': 'דברי הימים א',
+      'דה"ב': 'דברי הימים ב',
+    };
+    
+    return bookNameMapping[bookName] ?? bookName;
   }
   
   /// מעבד טקסט עם קישורים קיימים - לא נוגע בתוכן של תגי <a>
@@ -244,23 +262,24 @@ class AutoLinkProcessor {
       
       // דפוס מורחב לתנ"ך - תומך בפורמטים:
       // - "אסתר ב,ט", "אסתר פרק ב פסוק ט", "אסתר פ"ב פ"ט"
-      // - "בראשית א,א", "תהלים כג,ד"
+      // - "בראשית א,א", "תהלים כג,ד", "ויקרא י\"ד כ\"ב"
       final pattern = RegExp(
+        '(?<![א-ת])' +  // לא אחרי אות עברית (גבול מילה שמאלי)
         '(' + bookPattern + ')' +  // שם הספר (קבוצה 1)
-        '(?![א-ת])' +  // ודא שזו מילה שלמה
+        '(?![א-ת])' +  // לא לפני אות עברית (גבול מילה ימני)
         '\\s+' +  // רווח חובה
         '(?:' +  // התחלת קבוצה לא לוכדת עבור כל הפורמטים
           // פורמט עם "פרק" ו"פסוק" מפורש
-          'פרק\\s+([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 2)
-          '(?:\\s+פסוק\\s+([א-ת]{1,3}|[0-9]{1,3}))?' +  // פסוק אופציונלי (קבוצה 3)
+          'פרק\\s+([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3})' +  // פרק (קבוצה 2)
+          '(?:\\s+פסוק\\s+([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3}))?' +  // פסוק אופציונלי (קבוצה 3)
         '|' +  // או
           // פורמט עם קיצורים פ"א פ"ב
-          'פ"([א-ת]{1,3}|[0-9]{1,3})' +  // פרק מקוצר (קבוצה 4)
-          '(?:\\s+פ"([א-ת]{1,3}|[0-9]{1,3}))?' +  // פסוק מקוצר אופציונלי (קבוצה 5)
+          'פ"([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3})' +  // פרק מקוצר (קבוצה 4)
+          '(?:\\s+פ"([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3}))?' +  // פסוק מקוצר אופציונלי (קבוצה 5)
         '|' +  // או
-          // פורמט פשוט עם פסיק או רווח
-          '([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 6)
-          '(?:(?:,\\s*|\\s+)([א-ת]{1,3}|[0-9]{1,3}))?' +  // פסוק אופציונלי (קבוצה 7)
+          // פורמט פשוט עם פסיק או רווח - כולל גרשיים
+          '([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3})' +  // פרק (קבוצה 6)
+          '(?:(?:,\\s*|\\s+)([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3}))?' +  // פסוק אופציונלי (קבוצה 7)
         ')' +
         '(?=\\s|\\.|,|:|;|\\)|\\]|<|\$)',  // סוף - רווח או סימן פיסוק או תג HTML
         unicode: true,
@@ -284,16 +303,16 @@ class AutoLinkProcessor {
         
         if (match.group(2) != null) {
           // פורמט עם "פרק" ו"פסוק" מפורש
-          chapter = match.group(2)!;
-          verse = match.group(3);
+          chapter = _cleanPageNumber(match.group(2)!);
+          verse = match.group(3) != null ? _cleanPageNumber(match.group(3)!) : null;
         } else if (match.group(4) != null) {
           // פורמט עם קיצורים פ"א פ"ב
-          chapter = match.group(4)!;
-          verse = match.group(5);
+          chapter = _cleanPageNumber(match.group(4)!);
+          verse = match.group(5) != null ? _cleanPageNumber(match.group(5)!) : null;
         } else if (match.group(6) != null) {
           // פורמט פשוט
-          chapter = match.group(6)!;
-          verse = match.group(7);
+          chapter = _cleanPageNumber(match.group(6)!);
+          verse = match.group(7) != null ? _cleanPageNumber(match.group(7)!) : null;
         }
         
         if (chapter == null) {
@@ -305,8 +324,11 @@ class AutoLinkProcessor {
           return fullMatch;
         }
         
+        // מיפוי שמות חלופיים לשם הקובץ הנכון
+        String actualBookName = _mapBookNameToFileName(bookName);
+        
         // בניית URL - תמיד נפתח לפרק (לא לפסוק ספציפי)
-        String url = 'book://$bookName#פרק $chapter';
+        String url = 'book://$actualBookName#פרק $chapter';
         
         // החזרת הטקסט המקורי עם קישור
         final linkText = fullMatch.trim();
@@ -339,21 +361,22 @@ class AutoLinkProcessor {
       // - "ביצה פ"ב מ"ה", "ביצה פרק ה משנה ג"
       // - "ברכות א,א", "שבת ב ג"
       final pattern = RegExp(
+        '(?<![א-ת])' +  // לא אחרי אות עברית (גבול מילה שמאלי)
         '(' + orderPattern + ')' +  // שם המסכת (קבוצה 1)
-        '(?![א-ת])' +  // ודא שזו מילה שלמה
+        '(?![א-ת])' +  // לא לפני אות עברית (גבול מילה ימני)
         '\\s+' +  // רווח חובה
         '(?:' +  // התחלת קבוצה לא לוכדת עבור כל הפורמטים
           // פורמט עם "פרק" ו"משנה" מפורש
-          'פרק\\s+([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 2)
-          '(?:\\s+משנה\\s+([א-ת]{1,3}|[0-9]{1,3}))?' +  // משנה אופציונלית (קבוצה 3)
+          'פרק\\s+([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3})' +  // פרק (קבוצה 2)
+          '(?:\\s+משנה\\s+([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3}))?' +  // משנה אופציונלית (קבוצה 3)
         '|' +  // או
           // פורמט עם קיצורים פ"א מ"ב
-          'פ"([א-ת]{1,3}|[0-9]{1,3})' +  // פרק מקוצר (קבוצה 4)
-          '(?:\\s+מ"([א-ת]{1,3}|[0-9]{1,3}))?' +  // משנה מקוצרת אופציונלית (קבוצה 5)
+          'פ"([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3})' +  // פרק מקוצר (קבוצה 4)
+          '(?:\\s+מ"([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3}))?' +  // משנה מקוצרת אופציונלית (קבוצה 5)
         '|' +  // או
-          // פורמט פשוט עם פסיק או רווח
-          '([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 6)
-          '(?:(?:,\\s*|\\s+)([א-ת]{1,3}|[0-9]{1,3}))?' +  // משנה אופציונלית (קבוצה 7)
+          // פורמט פשוט עם פסיק או רווח - כולל גרשיים
+          '([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3})' +  // פרק (קבוצה 6)
+          '(?:(?:,\\s*|\\s+)([א-ת]{1,3}(?:["\']\\s*[א-ת])?|[0-9]{1,3}))?' +  // משנה אופציונלית (קבוצה 7)
         ')' +
         '(?=\\s|\\.|,|:|;|\\)|\\]|<|\$)',  // סוף - רווח או סימן פיסוק או תג HTML
         unicode: true,
@@ -407,16 +430,16 @@ class AutoLinkProcessor {
         
         if (match.group(2) != null) {
           // פורמט עם "פרק" ו"משנה" מפורש
-          chapter = match.group(2)!;
-          mishna = match.group(3);
+          chapter = _cleanPageNumber(match.group(2)!);
+          mishna = match.group(3) != null ? _cleanPageNumber(match.group(3)!) : null;
         } else if (match.group(4) != null) {
           // פורמט עם קיצורים פ"א מ"ב
-          chapter = match.group(4)!;
-          mishna = match.group(5);
+          chapter = _cleanPageNumber(match.group(4)!);
+          mishna = match.group(5) != null ? _cleanPageNumber(match.group(5)!) : null;
         } else if (match.group(6) != null) {
           // פורמט פשוט
-          chapter = match.group(6)!;
-          mishna = match.group(7);
+          chapter = _cleanPageNumber(match.group(6)!);
+          mishna = match.group(7) != null ? _cleanPageNumber(match.group(7)!) : null;
         }
         
         if (chapter == null) {
@@ -428,8 +451,11 @@ class AutoLinkProcessor {
           return fullMatch;
         }
         
+        // הוספת "משנה" לפני שם המסכת
+        String actualTractate = 'משנה $tractate';
+        
         // בניית URL - תמיד נפתח לפרק (לא למשנה ספציפית)
-        String url = 'book://$tractate#פרק $chapter';
+        String url = 'book://$actualTractate#פרק $chapter';
         
         // החזרת הטקסט המקורי עם קישור
         final linkText = fullMatch.trim();
