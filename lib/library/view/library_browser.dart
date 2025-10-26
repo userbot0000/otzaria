@@ -150,8 +150,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                     prefixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.search),
                         _buildTopicsFilterButton(context, state),
+                        const Icon(Icons.search),
                       ],
                     ),
                     prefixIconConstraints: const BoxConstraints(
@@ -238,89 +238,18 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       return const SizedBox.shrink();
     }
 
-    return IconButton(
-      icon: Icon(
-        Icons.filter_list,
-        color: (state.selectedTopics?.isNotEmpty ?? false)
-            ? Theme.of(context).colorScheme.primary
-            : null,
-      ),
-      tooltip: 'סינון לפי נושאים',
-      onPressed: () => _showTopicsFilterDialog(context, state, relevantTopics),
-    );
-  }
-
-  void _showTopicsFilterDialog(BuildContext context, LibraryState state, List<String> relevantTopics) {
-    final searchController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) {
-          final filteredTopics = relevantTopics.where((topic) {
-            if (searchController.text.isEmpty) return true;
-            return topic.contains(searchController.text);
-          }).toList();
-
-          return AlertDialog(
-            title: const Text('סינון לפי נושאים'),
-            content: SizedBox(
-              width: 300,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: searchController,
-                    decoration: const InputDecoration(
-                      hintText: 'חיפוש נושא...',
-                      prefixIcon: Icon(Icons.search),
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (value) => setState(() {}),
-                  ),
-                  const SizedBox(height: 16),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: filteredTopics.map((topic) {
-                          final isSelected = state.selectedTopics?.contains(topic) ?? false;
-                          return CheckboxListTile(
-                            title: Text(topic),
-                            value: isSelected,
-                            onChanged: (bool? value) {
-                              final currentTopics = List<String>.from(state.selectedTopics ?? []);
-                              if (value == true) {
-                                if (!currentTopics.contains(topic)) {
-                                  currentTopics.add(topic);
-                                }
-                              } else {
-                                currentTopics.remove(topic);
-                              }
-                              context.read<LibraryBloc>().add(FilterBooksByTopics(currentTopics));
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              if (state.selectedTopics?.isNotEmpty ?? false)
-                TextButton(
-                  onPressed: () {
-                    context.read<LibraryBloc>().add(const FilterBooksByTopics([]));
-                  },
-                  child: const Text('נקה הכל'),
-                ),
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('סגור'),
-              ),
-            ],
-          );
-        },
-      ),
+    return _TopicsFilterPopup(
+      relevantTopics: relevantTopics,
+      selectedTopics: state.selectedTopics ?? [],
+      onTopicToggle: (topic) {
+        final currentTopics = List<String>.from(state.selectedTopics ?? []);
+        if (currentTopics.contains(topic)) {
+          currentTopics.remove(topic);
+        } else {
+          currentTopics.add(topic);
+        }
+        context.read<LibraryBloc>().add(FilterBooksByTopics(currentTopics));
+      },
     );
   }
 
@@ -1019,6 +948,161 @@ class _LibraryBrowserState extends State<LibraryBrowser>
         onPressed: () {
           context.read<LibraryBloc>().add(RefreshLibrary());
         },
+      ),
+    ];
+  }
+}
+
+/// ווידג'ט מותאם אישית לסינון נושאים עם חיפוש
+class _TopicsFilterPopup extends StatefulWidget {
+  final List<String> relevantTopics;
+  final List<String> selectedTopics;
+  final Function(String) onTopicToggle;
+
+  const _TopicsFilterPopup({
+    required this.relevantTopics,
+    required this.selectedTopics,
+    required this.onTopicToggle,
+  });
+
+  @override
+  State<_TopicsFilterPopup> createState() => _TopicsFilterPopupState();
+}
+
+class _TopicsFilterPopupState extends State<_TopicsFilterPopup> {
+  final _searchQuery = ValueNotifier<String>('');
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchQuery.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      constraints: const BoxConstraints(maxHeight: 500, minWidth: 200),
+      icon: Icon(
+        Icons.filter_list,
+        color: widget.selectedTopics.isNotEmpty
+            ? Theme.of(context).colorScheme.primary
+            : null,
+      ),
+      tooltip: 'סינון לפי נושאים',
+      onSelected: (String topic) {
+        widget.onTopicToggle(topic);
+      },
+      onOpened: () {
+        // איפוס החיפוש כשה-popup נפתח
+        _searchController.clear();
+        _searchQuery.value = '';
+      },
+      itemBuilder: (BuildContext context) {
+        return [
+          // שדה חיפוש
+          PopupMenuItem<String>(
+            enabled: false,
+            child: TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'חיפוש נושא...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onChanged: (value) {
+                _searchQuery.value = value;
+              },
+            ),
+          ),
+          const PopupMenuDivider(),
+
+          // רשימת הנושאים - נשתמש ב-ValueListenableBuilder
+          ..._buildTopicsList(context),
+        ];
+      },
+    );
+  }
+
+  List<PopupMenuEntry<String>> _buildTopicsList(BuildContext context) {
+    return [
+      PopupMenuItem<String>(
+        enabled: false,
+        padding: EdgeInsets.zero,
+        child: ValueListenableBuilder<String>(
+          valueListenable: _searchQuery,
+          builder: (context, query, _) {
+            final filteredTopics = query.isEmpty
+                ? widget.relevantTopics
+                : widget.relevantTopics
+                    .where((topic) => topic.contains(query))
+                    .toList();
+
+            if (filteredTopics.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Center(
+                  child: Text(
+                    'לא נמצאו נושאים',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              );
+            }
+
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 400),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: filteredTopics.map((topic) {
+                    final isSelected = widget.selectedTopics.contains(topic);
+                    return InkWell(
+                      onTap: () {
+                        widget.onTopicToggle(topic);
+                        Navigator.pop(context);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 12.0,
+                        ),
+                        child: Row(
+                          children: [
+                            if (isSelected)
+                              Icon(
+                                Icons.check,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            if (isSelected) const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                topic,
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                  fontWeight: isSelected ? FontWeight.bold : null,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     ];
   }
