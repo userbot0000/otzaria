@@ -21,6 +21,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     on<SearchBooks>(_onSearchBooks);
     on<SelectTopics>(_onSelectTopics);
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
+    on<FilterBooksByTopics>(_onFilterBooksByTopics);
   }
 
   Future<void> _onLoadLibrary(
@@ -178,7 +179,8 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
       currentCategory: event.category,
       searchQuery: null,
       searchResults: null,
-      selectedTopics: null,
+      selectedTopics: [],
+      filteredBooks: null,
     ));
   }
 
@@ -191,7 +193,8 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         currentCategory: state.currentCategory!.parent!,
         searchQuery: null,
         searchResults: null,
-        selectedTopics: null,
+        selectedTopics: [],
+        filteredBooks: null,
       ));
     }
   }
@@ -239,5 +242,32 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     Emitter<LibraryState> emit,
   ) {
     emit(state.copyWith(selectedTopics: event.topics));
+  }
+
+  void _onFilterBooksByTopics(
+    FilterBooksByTopics event,
+    Emitter<LibraryState> emit,
+  ) {
+    if (event.topics.isEmpty) {
+      emit(state.copyWith(
+        selectedTopics: [],
+        filteredBooks: null,
+      ));
+      return;
+    }
+
+    final currentCategory = state.currentCategory;
+    if (currentCategory == null) return;
+
+    final allBooks = currentCategory.getAllBooks();
+    final filtered = allBooks.where((book) {
+      final bookTopics = book.topics.split(', ').map((t) => t.trim()).toList();
+      return event.topics.any((selectedTopic) => bookTopics.contains(selectedTopic));
+    }).toList();
+
+    emit(state.copyWith(
+      selectedTopics: event.topics,
+      filteredBooks: filtered,
+    ));
   }
 }

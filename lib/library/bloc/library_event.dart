@@ -68,3 +68,12 @@ class SelectTopics extends LibraryEvent {
   @override
   List<Object?> get props => [topics];
 }
+
+class FilterBooksByTopics extends LibraryEvent {
+  final List<String> topics;
+
+  const FilterBooksByTopics(this.topics);
+
+  @override
+  List<Object?> get props => [topics];
+}

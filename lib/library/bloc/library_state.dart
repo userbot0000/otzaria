@@ -10,6 +10,7 @@ class LibraryState extends Equatable {
   final List<Book>? searchResults;
   final String? searchQuery;
   final List<String>? selectedTopics;
+  final List<Book>? filteredBooks;
 
   const LibraryState({
     this.library,
@@ -19,6 +20,7 @@ class LibraryState extends Equatable {
     this.searchResults,
     this.searchQuery,
     this.selectedTopics,
+    this.filteredBooks,
   });
 
   factory LibraryState.initial() {
@@ -33,6 +35,7 @@ class LibraryState extends Equatable {
     List<Book>? searchResults,
     String? searchQuery,
     List<String>? selectedTopics,
+    List<Book>? filteredBooks,
   }) {
     return LibraryState(
       library: library ?? this.library,
@@ -42,6 +45,7 @@ class LibraryState extends Equatable {
       searchResults: searchResults,
       searchQuery: searchQuery ?? this.searchQuery,
       selectedTopics: selectedTopics ?? this.selectedTopics,
+      filteredBooks: filteredBooks,
     );
   }
 
@@ -54,5 +58,6 @@ class LibraryState extends Equatable {
         searchResults,
         searchQuery,
         selectedTopics,
+        filteredBooks,
       ];
 }
