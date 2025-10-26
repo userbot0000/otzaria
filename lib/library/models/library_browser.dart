@@ -1,0 +1,1134 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/focus/focus_repository.dart';
+import 'package:otzaria/library/bloc/library_bloc.dart';
+import 'package:otzaria/library/bloc/library_event.dart';
+import 'package:otzaria/library/bloc/library_state.dart';
+import 'package:otzaria/settings/settings_bloc.dart';
+import 'package:otzaria/settings/settings_event.dart';
+import 'package:otzaria/settings/settings_state.dart';
+import 'package:otzaria/models/books.dart';
+import 'package:otzaria/library/models/library.dart';
+import 'package:otzaria/daf_yomi/daf_yomi_helper.dart';
+import 'package:otzaria/file_sync/file_sync_bloc.dart';
+import 'package:otzaria/file_sync/file_sync_repository.dart';
+import 'package:otzaria/file_sync/file_sync_state.dart';
+import 'package:otzaria/daf_yomi/daf_yomi.dart';
+import 'package:otzaria/file_sync/file_sync_widget.dart';
+import 'package:otzaria/widgets/filter_list/src/filter_list_dialog.dart';
+import 'package:otzaria/widgets/filter_list/src/theme/filter_list_theme.dart';
+import 'package:otzaria/library/view/grid_items.dart';
+import 'package:otzaria/library/view/otzar_book_dialog.dart';
+import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
+import 'package:otzaria/history/history_dialog.dart';
+import 'package:otzaria/history/bloc/history_bloc.dart';
+import 'package:otzaria/history/bloc/history_event.dart';
+import 'package:otzaria/bookmarks/bookmarks_dialog.dart';
+import 'package:otzaria/widgets/workspace_icon_button.dart';
+import 'package:otzaria/widgets/responsive_action_bar.dart';
+import 'package:otzaria/utils/open_book.dart';
+import 'package:otzaria/widgets/generic_settings_dialog.dart';
+import 'package:otzaria/models/custom_topics.dart';
+
+class LibraryBrowser extends StatefulWidget {
+  const LibraryBrowser({super.key});
+
+  @override
+  State<LibraryBrowser> createState() => _LibraryBrowserState();
+}
+
+class _LibraryBrowserState extends State<LibraryBrowser>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  int _depth = 0;
+  final CustomTopicsManager _customTopicsManager = CustomTopicsManager();
+  @override
+  void initState() {
+    super.initState();
+    context.read<LibraryBloc>().add(LoadLibrary());
+    _customTopicsManager.loadCustomTopics();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      builder: (context, settingsState) {
+        return BlocBuilder<LibraryBloc, LibraryState>(
+          builder: (context, state) {
+            if (state.isLoading) {
+              return const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    Text('טוען ספרייה...'),
+                  ],
+                ),
+              );
+            }
+
+            if (state.error != null) {
+              return Center(child: Text('Error: ${state.error}'));
+            }
+
+            if (state.library == null) {
+              return const Center(child: Text('No library data available'));
+            }
+
+            return Scaffold(
+              appBar: AppBar(
+                title: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: DafYomi(
+                        onDafYomiTap: (tractate, daf) {
+                          openDafYomiBook(context, tractate, ' $daf.');
+                        },
+                      ),
+                    ),
+                    Text(
+                      state.currentCategory?.title ?? '',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.secondary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child:
+                          _buildLibraryActions(context, state, settingsState),
+                    ),
+                  ],
+                ),
+              ),
+              body: Column(
+                children: [
+                  _buildSearchBar(state),
+                  if (context
+                          .read<FocusRepository>()
+                          .librarySearchController
+                          .text
+                          .length >
+                      2)
+                    _buildTopicsSelection(context, state, settingsState)
+                  else
+                    _buildTopicsFilter(context, state),
+                  Expanded(child: _buildContent(state)),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchBar(LibraryState state) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: BlocBuilder<SettingsBloc, SettingsState>(
+        builder: (context, settingsState) {
+          final focusRepository = context.read<FocusRepository>();
+          return Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: focusRepository.librarySearchController,
+                  focusNode:
+                      context.read<FocusRepository>().librarySearchFocusNode,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    prefixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildTopicsFilterButton(context, state),
+                        const Icon(Icons.search),
+                      ],
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 80,
+                      minHeight: 48,
+                    ),
+                    suffixIcon: IconButton(
+                      onPressed: () {
+                        focusRepository.librarySearchController.clear();
+                        _update(context, state, settingsState);
+                        _refocusSearchBar();
+                      },
+                      icon: const Icon(Icons.clear),
+                    ),
+                    border: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(8.0)),
+                    ),
+                    hintText:
+                        'איתור ספר ב${state.currentCategory?.title ?? ""}',
+                  ),
+                  onChanged: (value) {
+                    context.read<LibraryBloc>().add(UpdateSearchQuery(value));
+                    context.read<LibraryBloc>().add(const SelectTopics([]));
+                    _update(context, state, settingsState);
+                  },
+                ),
+              ),
+              _buildSettingsButton(context, settingsState, state),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSettingsButton(BuildContext context, SettingsState settingsState, LibraryState state) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: IconButton(
+        icon: const Icon(Icons.settings_outlined),
+        tooltip: 'הגדרות',
+        onPressed: () => _showLibrarySettingsDialog(context, settingsState, state),
+        style: IconButton.styleFrom(
+          foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopicsFilterButton(BuildContext context, LibraryState state) {
+    if (state.currentCategory == null) {
+      return const SizedBox.shrink();
+    }
+
+    final allBooks = state.currentCategory!.getAllBooks();
+    final allTopics = _getAllTopics(allBooks);
+    
+    // נושאים קיימים לפי נתיב הקובץ
+    final categoryTopics = [
+      "תנך",
+      "מדרש",
+      "משנה",
+      "תלמוד בבלי",
+      "תלמוד ירושלמי",
+      "הלכה",
+      "משנה תורה",
+      "שולחן ערוך",
+      "חסידות",
+      "קבלה",
+      "ספרי מוסר",
+      "שות",
+      "ראשונים",
+      "אחרונים",
+      "מחברי זמננו",
+    ];
+
+    final relevantCategoryTopics =
+        categoryTopics.where((element) => allTopics.contains(element)).toList();
+
+    // נושאים מותאמים אישית - רק אלה שיש להם ספרים רלוונטיים
+    final customTopics = _customTopicsManager.topics
+        .where((topic) => allBooks.any((book) => 
+            _customTopicsManager.isBookInTopic(book.title, topic.name)))
+        .map((topic) => topic.displayName)
+        .toList();
+
+    // איחוד הרשימות - נושאים מותאמים אישית יופיעו בתחילת הרשימה
+    final allRelevantTopics = [...customTopics, ...relevantCategoryTopics];
+
+    if (allRelevantTopics.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return _TopicsFilterPopup(
+      relevantTopics: allRelevantTopics,
+      selectedTopics: state.selectedTopics ?? [],
+      onTopicToggle: (topic) {
+        final currentTopics = List<String>.from(state.selectedTopics ?? []);
+        if (currentTopics.contains(topic)) {
+          currentTopics.remove(topic);
+        } else {
+          currentTopics.add(topic);
+        }
+        context.read<LibraryBloc>().add(FilterBooksByTopics(currentTopics));
+      },
+    );
+  }
+
+  Widget _buildTopicsFilter(BuildContext context, LibraryState state) {
+    if (state.currentCategory == null || (state.selectedTopics?.isEmpty ?? true)) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Wrap(
+              spacing: 8.0,
+              runSpacing: 4.0,
+              children: (state.selectedTopics ?? []).map((topic) {
+                return Chip(
+                  label: Text(topic),
+                  deleteIcon: const Icon(Icons.close, size: 18),
+                  onDeleted: () {
+                    final currentTopics = List<String>.from(state.selectedTopics ?? []);
+                    currentTopics.remove(topic);
+                    context.read<LibraryBloc>().add(FilterBooksByTopics(currentTopics));
+                  },
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  labelStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    fontSize: 13,
+                  ),
+                  deleteIconColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                );
+              }).toList(),
+            ),
+          ),
+          if (state.selectedTopics?.isNotEmpty ?? false)
+            TextButton.icon(
+              onPressed: () {
+                context.read<LibraryBloc>().add(const FilterBooksByTopics([]));
+              },
+              icon: const Icon(Icons.clear_all, size: 18),
+              label: const Text('נקה הכל'),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopicsSelection(
+    BuildContext context,
+    LibraryState state,
+    SettingsState settingsState,
+  ) {
+    if (state.searchResults == null) {
+      return const SizedBox.shrink();
+    }
+
+    // נושאים קיימים לפי נתיב הקובץ
+    final categoryTopics = [
+      "תנך",
+      "מדרש",
+      "משנה",
+      "תלמוד בבלי",
+      "תלמוד ירושלמי",
+      "הלכה",
+      "משנה תורה",
+      "שולחן ערוך",
+      "חסידות",
+      "קבלה",
+      "ספרי מוסר",
+      "שות",
+      "ראשונים",
+      "אחרונים",
+      "מחברי זמננו",
+    ];
+
+    final allTopics = _getAllTopics(state.searchResults!);
+    final relevantCategoryTopics =
+        categoryTopics.where((element) => allTopics.contains(element)).toList();
+
+    // נושאים מותאמים אישית - רק אלה שיש להם ספרים רלוונטיים
+    final customTopics = _customTopicsManager.topics
+        .where((topic) => state.searchResults!.any((book) => 
+            _customTopicsManager.isBookInTopic(book.title, topic.name)))
+        .map((topic) => topic.displayName)
+        .toList();
+
+    // איחוד הרשימות - נושאים מותאמים אישית יופיעו בתחילת הרשימה
+    final allRelevantTopics = [...customTopics, ...relevantCategoryTopics];
+
+    return FilterListWidget<String>(
+      hideSearchField: true,
+      controlButtons: const [],
+      themeData: FilterListThemeData(
+        context,
+        wrapAlignment: WrapAlignment.center,
+      ),
+      onApplyButtonClick: (list) {
+        context.read<LibraryBloc>().add(SelectTopics(list ?? []));
+        _update(context, state, settingsState);
+        _refocusSearchBar();
+      },
+      validateSelectedItem: (list, item) => list != null && list.contains(item),
+      onItemSearch: (item, query) => item == query,
+      listData: allRelevantTopics,
+      selectedListData: state.selectedTopics ?? [],
+      choiceChipLabel: (p0) => p0,
+      hideSelectedTextCount: true,
+      choiceChipBuilder: (context, item, isSelected) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+        child: Chip(
+          label: Text(item),
+          backgroundColor:
+              isSelected! ? Theme.of(context).colorScheme.secondary : null,
+          labelStyle: TextStyle(
+            color:
+                isSelected ? Theme.of(context).colorScheme.onSecondary : null,
+            fontSize: 11,
+          ),
+          labelPadding: const EdgeInsets.all(0),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(LibraryState state) {
+    final items = state.searchResults != null
+        ? _buildSearchResults(state.searchResults!)
+        : _buildCategoryContent(state.currentCategory!);
+
+    return FutureBuilder<List<Widget>>(
+      future: items,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (snapshot.hasData && snapshot.data!.isEmpty) {
+          final focusRepository = context.read<FocusRepository>();
+          return Center(
+            child: Text(
+              focusRepository.librarySearchController.text.isNotEmpty
+                  ? 'אין תוצאות עבור "${focusRepository.librarySearchController.text}"'
+                  : 'אין פריטים להצגה בתיקייה זו',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+          );
+        }
+        return ListView.builder(
+          shrinkWrap: true,
+          key: PageStorageKey(state.currentCategory),
+          itemCount: snapshot.data!.length,
+          itemBuilder: (context, index) => snapshot.data![index],
+        );
+      },
+    );
+  }
+
+  Future<List<Widget>> _buildSearchResults(List<Book> books) async {
+    return [
+      Column(
+        children: [
+          MyGridView(
+            items: Future.value(
+              books
+                  .take(100)
+                  .map((book) => _buildBookItem(book, showTopics: true))
+                  .toList(),
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  Future<List<Widget>> _buildCategoryContent(Category category) async {
+    List<Widget> items = [];
+
+    // אם יש סינון לפי נושאים, נציג רק את הספרים המסוננים
+    final state = context.read<LibraryBloc>().state;
+    if (state.filteredBooks != null && state.filteredBooks!.isNotEmpty) {
+      items.add(
+        MyGridView(
+          items: Future.value(
+            state.filteredBooks!.map((book) => _buildBookItem(book, showTopics: true)).toList(),
+          ),
+        ),
+      );
+      return items;
+    }
+
+    category.books.sort((a, b) => a.order.compareTo(b.order));
+    category.subCategories.sort((a, b) => a.order.compareTo(b.order));
+
+    if (_depth != 0) {
+      // Add books
+      items.add(
+        MyGridView(
+          items: Future.value(
+            category.books.map((book) => _buildBookItem(book)).toList(),
+          ),
+        ),
+      );
+
+      // Add subcategories
+      for (Category subCategory in category.subCategories) {
+        subCategory.books.sort((a, b) => a.order.compareTo(b.order));
+        subCategory.subCategories.sort((a, b) => a.order.compareTo(b.order));
+
+        items.add(Center(child: HeaderItem(category: subCategory)));
+        items.add(
+          MyGridView(
+            items: Future.value([
+              ...subCategory.books.map((book) => _buildBookItem(book)),
+              ...subCategory.subCategories.map(
+                (cat) => CategoryGridItem(
+                  category: cat,
+                  onCategoryClickCallback: () => _openCategory(cat),
+                ),
+              ),
+            ]),
+          ),
+        );
+      }
+    } else {
+      items.add(
+        MyGridView(
+          items: Future.value([
+            ...category.books.map((book) => _buildBookItem(book)),
+            ...category.subCategories.map(
+              (cat) => CategoryGridItem(
+                category: cat,
+                onCategoryClickCallback: () => _openCategory(cat),
+              ),
+            ),
+          ]),
+        ),
+      );
+    }
+
+    return items;
+  }
+
+  Widget _buildBookItem(Book book, {bool showTopics = false}) {
+    if (book is ExternalBook) {
+      return BookGridItem(
+        book: book,
+        onBookClickCallback: () => _openOtzarBook(book),
+        showTopics: showTopics,
+      );
+    }
+
+    return BookGridItem(
+      book: book,
+      showTopics: showTopics,
+      onBookClickCallback: () => _openBook(book),
+    );
+  }
+
+  void _openBook(Book book) {
+    final index = book is PdfBook ? 1 : 0;
+    openBook(context, book, index, '');
+  }
+
+  void _openCategory(Category category) {
+    setState(() => _depth++);
+    context.read<LibraryBloc>().add(NavigateToCategory(category));
+    _refocusSearchBar();
+  }
+
+  void _openOtzarBook(ExternalBook book) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return OtzarBookDialog(book: book);
+      },
+    );
+    _refocusSearchBar();
+  }
+
+  void _showSwitchWorkspaceDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const WorkspaceSwitcherDialog(),
+    );
+  }
+
+  void _showLibrarySettingsDialog(
+    BuildContext context,
+    SettingsState settingsState,
+    LibraryState state,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => BlocBuilder<SettingsBloc, SettingsState>(
+        builder: (context, currentSettingsState) {
+          return GenericSettingsDialog(
+            title: 'הגדרות ספרייה',
+            width: 500,
+            items: [
+              SwitchSettingsItem(
+                title: 'האם להציג ספרים מאתרים חיצוניים?',
+                subtitle: currentSettingsState.showExternalBooks
+                    ? 'יוצגו גם ספרים מאתרים חיצוניים'
+                    : 'יוצגו רק ספרים מספריית אוצריא',
+                value: currentSettingsState.showExternalBooks,
+                onChanged: (value) {
+                  context.read<SettingsBloc>().add(UpdateShowExternalBooks(value));
+                  context.read<SettingsBloc>().add(UpdateShowHebrewBooks(value));
+                  context.read<SettingsBloc>().add(UpdateShowOtzarHachochma(value));
+                  _update(context, state, currentSettingsState);
+                },
+                dependentItems: currentSettingsState.showExternalBooks
+                    ? [
+                        CheckboxSettingsItem(
+                          title: 'הצג ספרים מאוצר החכמה',
+                          value: currentSettingsState.showOtzarHachochma,
+                          onChanged: (bool? value) {
+                            if (value != null) {
+                              context.read<SettingsBloc>().add(
+                                    UpdateShowOtzarHachochma(value),
+                                  );
+                              _update(context, state, currentSettingsState);
+                            }
+                          },
+                        ),
+                        CheckboxSettingsItem(
+                          title: 'הצג ספרים מהיברובוקס',
+                          value: currentSettingsState.showHebrewBooks,
+                          onChanged: (bool? value) {
+                            if (value != null) {
+                              context.read<SettingsBloc>().add(
+                                    UpdateShowHebrewBooks(value),
+                                  );
+                              _update(context, state, currentSettingsState);
+                            }
+                          },
+                        ),
+                      ]
+                    : null,
+              ),
+            ],
+          );
+        },
+      ),
+    ).then((_) => _refocusSearchBar());
+  }
+
+  List<String> _getAllTopics(List<Book> books) {
+    final Set<String> topics = {};
+    for (final book in books) {
+      topics.addAll(book.topics.split(', '));
+    }
+    return topics.toList();
+  }
+
+  void _update(
+    BuildContext context,
+    LibraryState state,
+    SettingsState settingsState,
+  ) {
+    final searchText =
+        context.read<FocusRepository>().librarySearchController.text;
+    // Remove all quotation marks from the search query
+    final cleanSearchText = searchText.replaceAll('"', '');
+
+    context.read<LibraryBloc>().add(
+          UpdateSearchQuery(cleanSearchText),
+        );
+    context.read<LibraryBloc>().add(
+          SearchBooks(
+            showHebrewBooks: settingsState.showHebrewBooks,
+            showOtzarHachochma: settingsState.showOtzarHachochma,
+          ),
+        );
+    setState(() {});
+    _refocusSearchBar();
+  }
+
+  void _refocusSearchBar({bool selectAll = false}) {
+    final focusRepository = context.read<FocusRepository>();
+    focusRepository.requestLibrarySearchFocus(selectAll: selectAll);
+  }
+
+  void _showHistoryDialog(BuildContext context) {
+    context.read<HistoryBloc>().add(FlushHistory());
+    showDialog(
+      context: context,
+      builder: (context) => const HistoryDialog(),
+    );
+  }
+
+  void _showBookmarksDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const BookmarksDialog(),
+    );
+  }
+
+  /// בניית כפתורי הפעולה של הספרייה עם רכיב רספונסיבי
+  Widget _buildLibraryActions(
+      BuildContext context, LibraryState state, SettingsState settingsState) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    int maxButtons;
+
+    if (screenWidth < 400) {
+      maxButtons = 1; // כפתור אחד + "..." במסכים קטנים מאוד
+    } else if (screenWidth < 500) {
+      maxButtons = 2; // 2 כפתורים + "..." במסכים קטנים
+    } else if (screenWidth < 600) {
+      maxButtons = 3; // 3 כפתורים + "..." במסכים בינוניים קטנים
+    } else if (screenWidth < 700) {
+      maxButtons = 4; // 4 כפתורים + "..." במסכים בינוניים
+    } else if (screenWidth < 900) {
+      maxButtons = 5; // 5 כפתורים + "..." במסכים גדולים
+    } else {
+      maxButtons = 6; // כל הכפתורים במסכים רחבים
+    }
+
+    return ResponsiveActionBar(
+      actions: _buildPrioritizedLibraryActions(context, state, settingsState),
+      originalOrder:
+          _buildOriginalOrderLibraryActions(context, state, settingsState),
+      maxVisibleButtons: maxButtons,
+      overflowOnRight: true, // כפתור "..." ימני במסך הספרייה
+    );
+  }
+
+  /// בניית רשימת כפתורים בסדר המקורי (כמו במסך הרחב)
+  List<ActionButtonData> _buildOriginalOrderLibraryActions(
+    BuildContext context,
+    LibraryState state,
+    SettingsState settingsState,
+  ) {
+    return [
+      // חזור לתיקיה קודמת (ראשון במסך הרחב)
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.arrow_upward),
+          tooltip: 'חזרה לתיקיה הקודמת',
+          onPressed: () {
+            if (state.currentCategory?.parent != null) {
+              setState(() => _depth = _depth > 0 ? _depth - 1 : 0);
+              context.read<LibraryBloc>().add(NavigateUp());
+              context.read<LibraryBloc>().add(const SearchBooks());
+              _refocusSearchBar(selectAll: true);
+            }
+          },
+        ),
+        icon: Icons.arrow_upward,
+        tooltip: 'חזרה לתיקיה הקודמת',
+        onPressed: () {
+          if (state.currentCategory?.parent != null) {
+            setState(() => _depth = _depth > 0 ? _depth - 1 : 0);
+            context.read<LibraryBloc>().add(NavigateUp());
+            context.read<LibraryBloc>().add(const SearchBooks());
+            _refocusSearchBar(selectAll: true);
+          }
+        },
+      ),
+
+      // חזרה לתיקיה ראשית
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.home),
+          tooltip: 'חזרה לתיקיה הראשית',
+          onPressed: () {
+            setState(() => _depth = 0);
+            context.read<LibraryBloc>().add(LoadLibrary());
+            context.read<FocusRepository>().librarySearchController.clear();
+            _update(context, state, settingsState);
+            _refocusSearchBar(selectAll: true);
+          },
+        ),
+        icon: Icons.home,
+        tooltip: 'חזרה לתיקיה הראשית',
+        onPressed: () {
+          setState(() => _depth = 0);
+          context.read<LibraryBloc>().add(LoadLibrary());
+          context.read<FocusRepository>().librarySearchController.clear();
+          _update(context, state, settingsState);
+          _refocusSearchBar(selectAll: true);
+        },
+      ),
+
+      // סינכרון
+      ActionButtonData(
+        widget: BlocProvider(
+          create: (context) => FileSyncBloc(
+            repository: FileSyncRepository(
+              githubOwner: "Y-PLONI",
+              repositoryName: "otzaria-library",
+              branch: "main",
+            ),
+          ),
+          child: BlocListener<FileSyncBloc, FileSyncState>(
+            listener: (context, syncState) {
+              if ((syncState.status == FileSyncStatus.completed ||
+                      syncState.status == FileSyncStatus.error) &&
+                  syncState.hasNewSync) {
+                context.read<LibraryBloc>().add(RefreshLibrary());
+              }
+            },
+            child: const SyncIconButton(),
+          ),
+        ),
+        icon: Icons.sync,
+        tooltip: 'סינכרון',
+        onPressed: () {
+          // הפעולה מטופלת ב-SyncIconButton
+        },
+      ),
+
+      // טעינה מחדש
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: 'טעינה מחדש של רשימת הספרים',
+          onPressed: () {
+            context.read<LibraryBloc>().add(RefreshLibrary());
+          },
+        ),
+        icon: Icons.refresh,
+        tooltip: 'טעינה מחדש של רשימת הספרים',
+        onPressed: () {
+          context.read<LibraryBloc>().add(RefreshLibrary());
+        },
+      ),
+
+      // היסטוריה
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.history),
+          tooltip: 'הצג היסטוריה',
+          onPressed: () => _showHistoryDialog(context),
+        ),
+        icon: Icons.history,
+        tooltip: 'הצג היסטוריה',
+        onPressed: () => _showHistoryDialog(context),
+      ),
+
+      // סימניות
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.bookmark),
+          tooltip: 'הצג סימניות',
+          onPressed: () => _showBookmarksDialog(context),
+        ),
+        icon: Icons.bookmark,
+        tooltip: 'הצג סימניות',
+        onPressed: () => _showBookmarksDialog(context),
+      ),
+
+      // החלף שולחן עבודה
+      ActionButtonData(
+        widget: SizedBox(
+          width: 180,
+          child: WorkspaceIconButton(
+            onPressed: () => _showSwitchWorkspaceDialog(context),
+          ),
+        ),
+        icon: Icons.workspaces,
+        tooltip: 'החלף שולחן עבודה',
+        onPressed: () => _showSwitchWorkspaceDialog(context),
+      ),
+    ];
+  }
+
+  /// בניית רשימת כפתורים לפי סדר עדיפות (החשוב ביותר ראשון)
+  List<ActionButtonData> _buildPrioritizedLibraryActions(
+    BuildContext context,
+    LibraryState state,
+    SettingsState settingsState,
+  ) {
+    return [
+      // 1) חזור לתיקיה קודמת, חזרה לתיקיה ראשית (החשובים ביותר)
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.arrow_upward),
+          tooltip: 'חזרה לתיקיה הקודמת',
+          onPressed: () {
+            if (state.currentCategory?.parent != null) {
+              setState(() => _depth = _depth > 0 ? _depth - 1 : 0);
+              context.read<LibraryBloc>().add(NavigateUp());
+              context.read<LibraryBloc>().add(const SearchBooks());
+              _refocusSearchBar(selectAll: true);
+            }
+          },
+        ),
+        icon: Icons.arrow_upward,
+        tooltip: 'חזרה לתיקיה הקודמת',
+        onPressed: () {
+          if (state.currentCategory?.parent != null) {
+            setState(() => _depth = _depth > 0 ? _depth - 1 : 0);
+            context.read<LibraryBloc>().add(NavigateUp());
+            context.read<LibraryBloc>().add(const SearchBooks());
+            _refocusSearchBar(selectAll: true);
+          }
+        },
+      ),
+
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.home),
+          tooltip: 'חזרה לתיקיה הראשית',
+          onPressed: () {
+            setState(() => _depth = 0);
+            context.read<LibraryBloc>().add(LoadLibrary());
+            context.read<FocusRepository>().librarySearchController.clear();
+            _update(context, state, settingsState);
+            _refocusSearchBar(selectAll: true);
+          },
+        ),
+        icon: Icons.home,
+        tooltip: 'חזרה לתיקיה הראשית',
+        onPressed: () {
+          setState(() => _depth = 0);
+          context.read<LibraryBloc>().add(LoadLibrary());
+          context.read<FocusRepository>().librarySearchController.clear();
+          _update(context, state, settingsState);
+          _refocusSearchBar(selectAll: true);
+        },
+      ),
+
+      // 2) הצג היסטוריה, הצג סימניות
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.history),
+          tooltip: 'הצג היסטוריה',
+          onPressed: () => _showHistoryDialog(context),
+        ),
+        icon: Icons.history,
+        tooltip: 'הצג היסטוריה',
+        onPressed: () => _showHistoryDialog(context),
+      ),
+
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.bookmark),
+          tooltip: 'הצג סימניות',
+          onPressed: () => _showBookmarksDialog(context),
+        ),
+        icon: Icons.bookmark,
+        tooltip: 'הצג סימניות',
+        onPressed: () => _showBookmarksDialog(context),
+      ),
+
+      // 3) החלף שולחן עבודה
+      ActionButtonData(
+        widget: SizedBox(
+          width: 180,
+          child: WorkspaceIconButton(
+            onPressed: () => _showSwitchWorkspaceDialog(context),
+          ),
+        ),
+        icon: Icons.workspaces,
+        tooltip: 'החלף שולחן עבודה',
+        onPressed: () => _showSwitchWorkspaceDialog(context),
+      ),
+
+      // 4) סינכרון
+      ActionButtonData(
+        widget: BlocProvider(
+          create: (context) => FileSyncBloc(
+            repository: FileSyncRepository(
+              githubOwner: "Y-PLONI",
+              repositoryName: "otzaria-library",
+              branch: "main",
+            ),
+          ),
+          child: BlocListener<FileSyncBloc, FileSyncState>(
+            listener: (context, syncState) {
+              if ((syncState.status == FileSyncStatus.completed ||
+                      syncState.status == FileSyncStatus.error) &&
+                  syncState.hasNewSync) {
+                context.read<LibraryBloc>().add(RefreshLibrary());
+              }
+            },
+            child: const SyncIconButton(),
+          ),
+        ),
+        icon: Icons.sync,
+        tooltip: 'סינכרון',
+        onPressed: () {
+          // הפעולה מטופלת ב-SyncIconButton
+        },
+      ),
+
+      // 5) טעינה מחדש של רשימת הספרים
+      ActionButtonData(
+        widget: IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: 'טעינה מחדש של רשימת הספרים',
+          onPressed: () {
+            context.read<LibraryBloc>().add(RefreshLibrary());
+          },
+        ),
+        icon: Icons.refresh,
+        tooltip: 'טעינה מחדש של רשימת הספרים',
+        onPressed: () {
+          context.read<LibraryBloc>().add(RefreshLibrary());
+        },
+      ),
+    ];
+  }
+}
+
+/// ווידג'ט מותאם אישית לסינון נושאים עם חיפוש
+class _TopicsFilterPopup extends StatefulWidget {
+  final List<String> relevantTopics;
+  final List<String> selectedTopics;
+  final Function(String) onTopicToggle;
+
+  const _TopicsFilterPopup({
+    required this.relevantTopics,
+    required this.selectedTopics,
+    required this.onTopicToggle,
+  });
+
+  @override
+  State<_TopicsFilterPopup> createState() => _TopicsFilterPopupState();
+}
+
+class _TopicsFilterPopupState extends State<_TopicsFilterPopup> {
+  final _searchQuery = ValueNotifier<String>('');
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchQuery.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      constraints: const BoxConstraints(maxHeight: 500, minWidth: 200),
+      offset: const Offset(-180, 0), // מזיז את ה-PIN שמאלה כדי שיתחיל אחרי גבול החלון הימני
+      icon: Icon(
+        Icons.filter_list,
+        color: widget.selectedTopics.isNotEmpty
+            ? Theme.of(context).colorScheme.primary
+            : null,
+      ),
+      tooltip: 'סינון לפי נושאים',
+      onSelected: (String topic) {
+        widget.onTopicToggle(topic);
+      },
+      onOpened: () {
+        // איפוס החיפוש כשה-popup נפתח
+        _searchController.clear();
+        _searchQuery.value = '';
+      },
+      itemBuilder: (BuildContext context) {
+        return [
+          // שדה חיפוש
+          PopupMenuItem<String>(
+            enabled: false,
+            child: TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'חיפוש נושא...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onChanged: (value) {
+                _searchQuery.value = value;
+              },
+            ),
+          ),
+          const PopupMenuDivider(),
+
+          // רשימת הנושאים - נשתמש ב-ValueListenableBuilder
+          ..._buildTopicsList(context),
+        ];
+      },
+    );
+  }
+
+  List<PopupMenuEntry<String>> _buildTopicsList(BuildContext context) {
+    return [
+      PopupMenuItem<String>(
+        enabled: false,
+        padding: EdgeInsets.zero,
+        child: ValueListenableBuilder<String>(
+          valueListenable: _searchQuery,
+          builder: (context, query, _) {
+            final filteredTopics = query.isEmpty
+                ? widget.relevantTopics
+                : widget.relevantTopics
+                    .where((topic) => topic.contains(query))
+                    .toList();
+
+            if (filteredTopics.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Center(
+                  child: Text(
+                    'לא נמצאו נושאים',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              );
+            }
+
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 400),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: filteredTopics.map((topic) {
+                    final isSelected = widget.selectedTopics.contains(topic);
+                    return InkWell(
+                      onTap: () {
+                        widget.onTopicToggle(topic);
+                        Navigator.pop(context);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 12.0,
+                        ),
+                        child: Row(
+                          children: [
+                            if (isSelected)
+                              Icon(
+                                Icons.check,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            if (isSelected) const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                topic,
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                  fontWeight: isSelected ? FontWeight.bold : null,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ];
+  }
+}
