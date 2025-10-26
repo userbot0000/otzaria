@@ -7,9 +7,11 @@ import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
+import 'package:otzaria/models/custom_topics.dart';
 
 class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   final DataRepository _repository = DataRepository.instance;
+  final CustomTopicsManager _customTopicsManager = CustomTopicsManager();
 
   LibraryBloc() : super(LibraryState.initial()) {
     on<LoadLibrary>(_onLoadLibrary);
@@ -22,6 +24,13 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     on<SelectTopics>(_onSelectTopics);
     on<UpdateSearchQuery>(_onUpdateSearchQuery);
     on<FilterBooksByTopics>(_onFilterBooksByTopics);
+    
+    // טעינת הנושאים המותאמים אישית
+    _initializeCustomTopics();
+  }
+
+  Future<void> _initializeCustomTopics() async {
+    await _customTopicsManager.loadCustomTopics();
   }
 
   Future<void> _onLoadLibrary(
@@ -261,9 +270,20 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
 
     final allBooks = currentCategory.getAllBooks();
     final filtered = allBooks.where((book) {
-      final bookTopics = book.topics.split(', ').map((t) => t.trim()).toList();
-      // סינון AND - הספר חייב להכיל את כל הנושאים שנבחרו
-      return event.topics.every((selectedTopic) => bookTopics.contains(selectedTopic));
+      return event.topics.any((selectedTopic) {
+        // בדיקה אם זה נושא מותאם אישית
+        if (_customTopicsManager.topics.any((t) => t.displayName == selectedTopic)) {
+          // חיפוש לפי הגדרות מותאמות אישית
+          final customTopic = _customTopicsManager.topics.firstWhere(
+            (t) => t.displayName == selectedTopic,
+          );
+          return _customTopicsManager.isBookInTopic(book.title, customTopic.name);
+        } else {
+          // חיפוש לפי השדה topics הקיים (נתיב הקובץ)
+          final bookTopics = book.topics.split(', ').map((t) => t.trim()).toList();
+          return bookTopics.contains(selectedTopic);
+        }
+      });
     }).toList();
 
     emit(state.copyWith(
