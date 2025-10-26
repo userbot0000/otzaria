@@ -38,6 +38,12 @@ class AutoLinkProcessor {
     // קודם כל, נזהה הפניות תלמודיות (מסכת+דף+עמוד)
     String result = _processTalmudReferences(htmlText, excludeExistingLinks);
     
+    // זיהוי הפניות לתנ"ך (ספר+פרק+פסוק)
+    result = _processTanakhReferences(result, excludeExistingLinks);
+    
+    // זיהוי הפניות למשנה (מסכת+פרק+משנה)
+    result = _processMishnaReferences(result, excludeExistingLinks);
+    
     return result;
   }
   
@@ -196,6 +202,270 @@ class AutoLinkProcessor {
     if (lastIndex < htmlText.length) {
       final textAfter = htmlText.substring(lastIndex);
       buffer.write(_processTalmudReferences(textAfter, false));
+    }
+    
+    return buffer.toString();
+  }
+
+  /// מזהה ומקשר הפניות לתנ"ך בפורמטים שונים
+  String _processTanakhReferences(String htmlText, bool excludeExistingLinks) {
+    try {
+      if (excludeExistingLinks && htmlText.contains('class="tanakh-ref"')) {
+        return _processTanakhWithExistingLinks(htmlText);
+      }
+      
+      final tanakhBooks = WordDictionary.instance.getTanakhBooks();
+      if (tanakhBooks.isEmpty) {
+        return htmlText;
+      }
+      
+      // בניית regex לזיהוי כל הפורמטים
+      final bookPattern = tanakhBooks.map((b) => RegExp.escape(b)).join('|');
+      
+      // דפוס מורחב לתנ"ך - תומך בפורמטים:
+      // - "אסתר ב,ט", "אסתר פרק ב פסוק ט", "אסתר פ"ב פ"ט"
+      // - "בראשית א,א", "תהלים כג,ד"
+      final pattern = RegExp(
+        '(' + bookPattern + ')' +  // שם הספר (קבוצה 1)
+        '(?![א-ת])' +  // ודא שזו מילה שלמה
+        '\\s+' +  // רווח חובה
+        '(?:' +  // התחלת קבוצה לא לוכדת עבור כל הפורמטים
+          // פורמט עם "פרק" ו"פסוק" מפורש
+          'פרק\\s+([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 2)
+          '(?:\\s+פסוק\\s+([א-ת]{1,3}|[0-9]{1,3}))?' +  // פסוק אופציונלי (קבוצה 3)
+        '|' +  // או
+          // פורמט עם קיצורים פ"א פ"ב
+          'פ"([א-ת]{1,3}|[0-9]{1,3})' +  // פרק מקוצר (קבוצה 4)
+          '(?:\\s+פ"([א-ת]{1,3}|[0-9]{1,3}))?' +  // פסוק מקוצר אופציונלי (קבוצה 5)
+        '|' +  // או
+          // פורמט פשוט עם פסיק או רווח
+          '([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 6)
+          '(?:(?:,\\s*|\\s+)([א-ת]{1,3}|[0-9]{1,3}))?' +  // פסוק אופציונלי (קבוצה 7)
+        ')' +
+        '(?=\\s|\\.|,|:|;|\\)|\\]|<|\$)',  // סוף - רווח או סימן פיסוק או תג HTML
+        unicode: true,
+        multiLine: true,
+      );
+      
+      String result = htmlText;
+      result = result.replaceAllMapped(pattern, (match) {
+        // בדיקה שזה לא בתוך תג HTML או קישור קיים
+        final beforeMatch = result.substring(0, match.start);
+        if (beforeMatch.contains('<a ') && 
+            beforeMatch.lastIndexOf('<a ') > beforeMatch.lastIndexOf('</a>')) {
+          return match.group(0)!;
+        }
+        
+        final fullMatch = match.group(0)!;
+        final bookName = match.group(1)!;
+        
+        // זיהוי פורמט ופרק/פסוק
+        String? chapter, verse;
+        
+        if (match.group(2) != null) {
+          // פורמט עם "פרק" ו"פסוק" מפורש
+          chapter = match.group(2)!;
+          verse = match.group(3);
+        } else if (match.group(4) != null) {
+          // פורמט עם קיצורים פ"א פ"ב
+          chapter = match.group(4)!;
+          verse = match.group(5);
+        } else if (match.group(6) != null) {
+          // פורמט פשוט
+          chapter = match.group(6)!;
+          verse = match.group(7);
+        }
+        
+        if (chapter == null) {
+          return fullMatch;
+        }
+        
+        // בניית URL - תמיד נפתח לפרק (לא לפסוק ספציפי)
+        String url = 'book://$bookName#פרק $chapter';
+        
+        // החזרת הטקסט המקורי עם קישור
+        final linkText = fullMatch.trim();
+        return '<a href="$url" class="tanakh-ref">$linkText</a>';
+      });
+      
+      return result;
+    } catch (e) {
+      return htmlText;
+    }
+  }
+
+  /// מזהה ומקשר הפניות למשנה בפורמטים שונים
+  String _processMishnaReferences(String htmlText, bool excludeExistingLinks) {
+    try {
+      // אם יש כבר קישורים קיימים (תלמוד או משנה), נעבד בזהירות
+      if (excludeExistingLinks && (htmlText.contains('class="mishna-ref"') || htmlText.contains('class="talmud-ref"'))) {
+        return _processMishnaWithExistingLinks(htmlText);
+      }
+      
+      final mishnaOrders = WordDictionary.instance.getMishnaOrders();
+      if (mishnaOrders.isEmpty) {
+        return htmlText;
+      }
+      
+      // בניית regex לזיהוי כל הפורמטים
+      final orderPattern = mishnaOrders.map((o) => RegExp.escape(o)).join('|');
+      
+      // דפוס מורחב למשנה - תומך בפורמטים:
+      // - "ביצה פ"ב מ"ה", "ביצה פרק ה משנה ג"
+      // - "ברכות א,א", "שבת ב ג"
+      final pattern = RegExp(
+        '(' + orderPattern + ')' +  // שם המסכת (קבוצה 1)
+        '(?![א-ת])' +  // ודא שזו מילה שלמה
+        '\\s+' +  // רווח חובה
+        '(?:' +  // התחלת קבוצה לא לוכדת עבור כל הפורמטים
+          // פורמט עם "פרק" ו"משנה" מפורש
+          'פרק\\s+([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 2)
+          '(?:\\s+משנה\\s+([א-ת]{1,3}|[0-9]{1,3}))?' +  // משנה אופציונלית (קבוצה 3)
+        '|' +  // או
+          // פורמט עם קיצורים פ"א מ"ב
+          'פ"([א-ת]{1,3}|[0-9]{1,3})' +  // פרק מקוצר (קבוצה 4)
+          '(?:\\s+מ"([א-ת]{1,3}|[0-9]{1,3}))?' +  // משנה מקוצרת אופציונלית (קבוצה 5)
+        '|' +  // או
+          // פורמט פשוט עם פסיק או רווח
+          '([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 6)
+          '(?:(?:,\\s*|\\s+)([א-ת]{1,3}|[0-9]{1,3}))?' +  // משנה אופציונלית (קבוצה 7)
+        ')' +
+        '(?=\\s|\\.|,|:|;|\\)|\\]|<|\$)',  // סוף - רווח או סימן פיסוק או תג HTML
+        unicode: true,
+        multiLine: true,
+      );
+      
+      String result = htmlText;
+      result = result.replaceAllMapped(pattern, (match) {
+        // בדיקה שזה לא בתוך תג HTML או קישור קיים
+        final beforeMatch = result.substring(0, match.start);
+        if (beforeMatch.contains('<a ') && 
+            beforeMatch.lastIndexOf('<a ') > beforeMatch.lastIndexOf('</a>')) {
+          return match.group(0)!;
+        }
+        
+        final fullMatch = match.group(0)!;
+        final tractate = match.group(1)!;
+        
+        // בדיקה נוספת: אם המסכת הזו קיימת גם בתלמוד, נבדוק אם זה נראה כמו הפניה תלמודית
+        final talmudTractates = WordDictionary.instance.getTractates();
+        if (talmudTractates.contains(tractate)) {
+          // זיהוי פורמט זמני כדי לבדוק אם זה יכול להיות תלמוד
+          String? tempChapter, tempMishna;
+          
+          if (match.group(2) != null) {
+            tempChapter = match.group(2)!;
+            tempMishna = match.group(3);
+          } else if (match.group(4) != null) {
+            tempChapter = match.group(4)!;
+            tempMishna = match.group(5);
+          } else if (match.group(6) != null) {
+            tempChapter = match.group(6)!;
+            tempMishna = match.group(7);
+          }
+          
+          if (tempChapter != null) {
+            // בדיקה אם מספר הפרק יכול להיות מספר דף תלמודי
+            final validPageNumbers = WordDictionary.instance.getValidPageNumbers();
+            if (validPageNumbers.contains(tempChapter)) {
+              // אם יש גם עמוד (משנה) שיכול להיות עמוד תלמודי (א/ב)
+              if (tempMishna != null && (tempMishna == 'א' || tempMishna == 'ב')) {
+                // זה כנראה הפניה תלמודית שלא נתפסה, לא ניצור קישור משנה
+                return fullMatch;
+              }
+            }
+          }
+        }
+        
+        // זיהוי פורמט ופרק/משנה
+        String? chapter, mishna;
+        
+        if (match.group(2) != null) {
+          // פורמט עם "פרק" ו"משנה" מפורש
+          chapter = match.group(2)!;
+          mishna = match.group(3);
+        } else if (match.group(4) != null) {
+          // פורמט עם קיצורים פ"א מ"ב
+          chapter = match.group(4)!;
+          mishna = match.group(5);
+        } else if (match.group(6) != null) {
+          // פורמט פשוט
+          chapter = match.group(6)!;
+          mishna = match.group(7);
+        }
+        
+        if (chapter == null) {
+          return fullMatch;
+        }
+        
+        // בניית URL - תמיד נפתח לפרק (לא למשנה ספציפית)
+        String url = 'book://$tractate#פרק $chapter';
+        
+        // החזרת הטקסט המקורי עם קישור
+        final linkText = fullMatch.trim();
+        return '<a href="$url" class="mishna-ref">$linkText</a>';
+      });
+      
+      return result;
+    } catch (e) {
+      return htmlText;
+    }
+  }
+
+  /// מעבד טקסט תנ"ך עם קישורים קיימים - לא נוגע בתוכן של תגי <a>
+  String _processTanakhWithExistingLinks(String htmlText) {
+    final buffer = StringBuffer();
+    int lastIndex = 0;
+    
+    // מוצא את כל תגי ה-<a>
+    final linkPattern = RegExp(r'<a\s[^>]*>.*?</a>', dotAll: true);
+    final matches = linkPattern.allMatches(htmlText);
+    
+    for (final match in matches) {
+      // מעבד את הטקסט לפני הקישור
+      final textBefore = htmlText.substring(lastIndex, match.start);
+      buffer.write(_processTanakhReferences(textBefore, false));
+      
+      // מוסיף את הקישור הקיים כמו שהוא
+      buffer.write(match.group(0));
+      
+      lastIndex = match.end;
+    }
+    
+    // מעבד את הטקסט אחרי הקישור האחרון
+    if (lastIndex < htmlText.length) {
+      final textAfter = htmlText.substring(lastIndex);
+      buffer.write(_processTanakhReferences(textAfter, false));
+    }
+    
+    return buffer.toString();
+  }
+
+  /// מעבד טקסט משנה עם קישורים קיימים - לא נוגע בתוכן של תגי <a>
+  /// גם לא יוצר קישורי משנה במקומות שכבר יש קישורי תלמוד
+  String _processMishnaWithExistingLinks(String htmlText) {
+    final buffer = StringBuffer();
+    int lastIndex = 0;
+    
+    // מוצא את כל תגי ה-<a> (כולל תלמוד ומשנה)
+    final linkPattern = RegExp(r'<a\s[^>]*>.*?</a>', dotAll: true);
+    final matches = linkPattern.allMatches(htmlText);
+    
+    for (final match in matches) {
+      // מעבד את הטקסט לפני הקישור - רק אם זה לא קישור תלמודי
+      final textBefore = htmlText.substring(lastIndex, match.start);
+      buffer.write(_processMishnaReferences(textBefore, false));
+      
+      // מוסיף את הקישור הקיים כמו שהוא
+      buffer.write(match.group(0));
+      
+      lastIndex = match.end;
+    }
+    
+    // מעבד את הטקסט אחרי הקישור האחרון
+    if (lastIndex < htmlText.length) {
+      final textAfter = htmlText.substring(lastIndex);
+      buffer.write(_processMishnaReferences(textAfter, false));
     }
     
     return buffer.toString();

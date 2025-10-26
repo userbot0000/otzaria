@@ -11,6 +11,8 @@ class WordDictionary {
   Map<String, WordLink>? _dictionary;
   List<String>? _tractates;
   List<String>? _validPageNumbers;
+  List<String>? _tanakhBooks;
+  List<String>? _mishnaOrders;
   
   /// טוען את המילון מקובץ JSON
   Future<void> loadDictionary() async {
@@ -33,12 +35,26 @@ class WordDictionary {
         _validPageNumbers = _getDefaultValidPageNumbers();
       }
       
+      if (jsonData.containsKey('tanakh_books')) {
+        _tanakhBooks = List<String>.from(jsonData['tanakh_books']);
+      } else {
+        _tanakhBooks = _getDefaultTanakhBooks();
+      }
+      
+      if (jsonData.containsKey('mishna_orders')) {
+        _mishnaOrders = List<String>.from(jsonData['mishna_orders']);
+      } else {
+        _mishnaOrders = _getDefaultMishnaOrders();
+      }
+      
       // יצירת מילון ריק - לא נשתמש בו יותר
       _dictionary = {};
     } catch (e) {
-      // אם הקובץ לא קיים, נשתמש ברשימת מסכתות ברירת מחדל
+      // אם הקובץ לא קיים, נשתמש ברשימות ברירת מחדל
       _tractates = _getDefaultTractates();
       _validPageNumbers = _getDefaultValidPageNumbers();
+      _tanakhBooks = _getDefaultTanakhBooks();
+      _mishnaOrders = _getDefaultMishnaOrders();
       _dictionary = {};
     }
   }
@@ -79,6 +95,41 @@ class WordDictionary {
     ];
   }
 
+  /// מחזיר רשימת ספרי תנ"ך ברירת מחדל
+  List<String> _getDefaultTanakhBooks() {
+    return [
+      // תורה
+      'בראשית', 'שמות', 'ויקרא', 'במדבר', 'דברים',
+      // נביאים ראשונים
+      'יהושע', 'שופטים', 'שמואל א', 'שמואל ב', 'מלכים א', 'מלכים ב',
+      // נביאים אחרונים
+      'ישעיה', 'ירמיה', 'יחזקאל',
+      'הושע', 'יואל', 'עמוס', 'עובדיה', 'יונה', 'מיכה', 'נחום', 'חבקוק', 'צפניה', 'חגי', 'זכריה', 'מלאכי',
+      // כתובים
+      'תהלים', 'משלי', 'איוב', 'שיר השירים', 'רות', 'איכה', 'קהלת', 'אסתר', 'דניאל', 'עזרא', 'נחמיה', 'דברי הימים א', 'דברי הימים ב',
+      // שמות חלופיים נפוצים
+      'תהילים', 'שה"ש', 'ש"א', 'ש"ב', 'מ"א', 'מ"ב', 'דה"א', 'דה"ב'
+    ];
+  }
+
+  /// מחזיר רשימת מסכתות משנה ברירת מחדל
+  List<String> _getDefaultMishnaOrders() {
+    return [
+      // סדר זרעים
+      'ברכות', 'פאה', 'דמאי', 'כלאים', 'שביעית', 'תרומות', 'מעשרות', 'מעשר שני', 'חלה', 'ערלה', 'בכורים',
+      // סדר מועד
+      'שבת', 'עירובין', 'פסחים', 'שקלים', 'יומא', 'סוכה', 'ביצה', 'ראש השנה', 'תענית', 'מגילה', 'מועד קטן', 'חגיגה',
+      // סדר נשים
+      'יבמות', 'כתובות', 'נדרים', 'נזיר', 'סוטה', 'גיטין', 'קידושין',
+      // סדר נזיקין
+      'בבא קמא', 'בבא מציעא', 'בבא בתרא', 'סנהדרין', 'מכות', 'שבועות', 'עדויות', 'עבודה זרה', 'אבות', 'הוריות',
+      // סדר קדשים
+      'זבחים', 'מנחות', 'חולין', 'בכורות', 'ערכין', 'תמורה', 'כריתות', 'מעילה', 'תמיד', 'מדות', 'קינים',
+      // סדר טהרות
+      'כלים', 'אהלות', 'נגעים', 'פרה', 'טהרות', 'מקואות', 'נדה', 'מכשירין', 'זבים', 'טבול יום', 'ידים', 'עוקצין'
+    ];
+  }
+
   /// מחזיר את רשימת המסכתות
   List<String> getTractates() {
     return List.from(_tractates ?? []);
@@ -87,6 +138,16 @@ class WordDictionary {
   /// מחזיר את רשימת מספרי הדפים התקינים
   List<String> getValidPageNumbers() {
     return List.from(_validPageNumbers ?? []);
+  }
+
+  /// מחזיר את רשימת ספרי התנ"ך
+  List<String> getTanakhBooks() {
+    return List.from(_tanakhBooks ?? []);
+  }
+
+  /// מחזיר את רשימת מסכתות המשנה
+  List<String> getMishnaOrders() {
+    return List.from(_mishnaOrders ?? []);
   }
   
   /// מחפש קישור למילה
