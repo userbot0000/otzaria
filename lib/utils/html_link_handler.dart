@@ -343,10 +343,22 @@ class HtmlLinkHandler {
       // קבלת תוכן הספציפי
       final tableOfContents = await book.tableOfContents;
       
-      // חיפוש בתוכן העניינים
+      // חיפוש בתוכן העניינים - קודם חיפוש מדויק
       for (final entry in tableOfContents) {
         if (isHeaderMatch(entry.text, headerName)) {
           return entry.index;
+        }
+      }
+      
+      // אם לא נמצא, ננסה לחפש רק לפי מספר הדף (בלי עמוד)
+      // זה עוזר כשהקישור כולל עמוד שלא קיים בתוכן העניינים
+      final pageOnlyMatch = _extractPageNumber(headerName);
+      if (pageOnlyMatch != null) {
+        for (final entry in tableOfContents) {
+          final entryPageMatch = _extractPageNumber(entry.text);
+          if (entryPageMatch != null && entryPageMatch == pageOnlyMatch) {
+            return entry.index;
+          }
         }
       }
 
@@ -354,13 +366,26 @@ class HtmlLinkHandler {
       final content = await book.text;
       final lines = content.split('\n');
       
+      // חיפוש מדויק
       for (int i = 0; i < lines.length; i++) {
         final line = lines[i];
-        // הסרת תגי HTML לחיפוש נקי
         final cleanLine = line.replaceAll(RegExp(r'<[^>]*>'), '').trim();
         
         if (isHeaderMatch(cleanLine, headerName)) {
           return i;
+        }
+      }
+      
+      // חיפוש לפי דף בלבד
+      if (pageOnlyMatch != null) {
+        for (int i = 0; i < lines.length; i++) {
+          final line = lines[i];
+          final cleanLine = line.replaceAll(RegExp(r'<[^>]*>'), '').trim();
+          final linePageMatch = _extractPageNumber(cleanLine);
+          
+          if (linePageMatch != null && linePageMatch == pageOnlyMatch) {
+            return i;
+          }
         }
       }
 
@@ -369,6 +394,25 @@ class HtmlLinkHandler {
       debugPrint('שגיאה בחיפוש כותרת: $e');
       return null;
     }
+  }
+  
+  /// מחלץ את מספר הדף מכותרת (למשל "דף כג א" -> "כג")
+  static String? _extractPageNumber(String text) {
+    // דפוס לזיהוי מספר דף עברי
+    final pagePattern = RegExp(r'דף\s+([א-ת]{1,3})');
+    final match = pagePattern.firstMatch(text);
+    if (match != null) {
+      return match.group(1);
+    }
+    
+    // אם אין "דף", ננסה למצוא מספר עברי בתחילת המחרוזת
+    final numberPattern = RegExp(r'^([א-ת]{1,3})(?:\s|$)');
+    final numberMatch = numberPattern.firstMatch(text.trim());
+    if (numberMatch != null) {
+      return numberMatch.group(1);
+    }
+    
+    return null;
   }
 
   /// מבצע חיפוש במערכת

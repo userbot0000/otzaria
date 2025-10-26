@@ -116,13 +116,9 @@ class AutoLinkProcessor {
           }
         }
         
-        // בניית URL פשוט: רק ספר + דף (+ עמוד אם יש)
-        String url;
-        if (side != null) {
-          url = 'book://$tractate#$pageNum $side';
-        } else {
-          url = 'book://$tractate#$pageNum';
-        }
+        // בניית URL עם "דף" - תמיד נשתמש רק במספר הדף ללא עמוד
+        // כך שאם העמוד לא נכון, עדיין נפתח את הדף הנכון
+        String url = 'book://$tractate#דף $pageNum';
         
         // החזרת הטקסט המקורי עם קישור
         final linkText = fullMatch.trim();
