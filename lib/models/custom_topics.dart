@@ -79,16 +79,8 @@ class CustomTopicsManager {
         order: 1,
         description: 'ספרים הקשורים לחג הפסח',
         bookTitles: [
-          'הגדה',
-          'פסח',
-          'חמץ',
-          'מצה',
-          'יציאת מצרים',
-          'ליל שימורים',
-          'ארבע כוסות',
-          'מרור',
-          'אפיקומן',
-          'חירות',
+          'פסחים',
+          'משנה פסחים',
         ],
       ),
       const CustomTopic(
@@ -243,6 +235,22 @@ class CustomTopicsManager {
           'פלפול ולוגיקה',
         ],
       ),
+      const CustomTopic(
+        name: 'halakha_general',
+        displayName: 'הלכה כללית',
+        order: 13,
+        description: 'ספרי הלכה כלליים',
+        bookTitles: [
+          'הלכות',
+          'הלכה',
+          'שולחן ערוך',
+          'משנה ברורה',
+          'רמב"ם',
+          'משנה תורה',
+          'טור',
+          'בית יוסף',
+        ],
+      ),
     ];
   }
 
@@ -266,18 +274,18 @@ class CustomTopicsManager {
     
     return booksInTopic.any((title) {
       final normalizedTitle = title.toLowerCase().trim();
-      // בדיקה אם אחד מהמילים בכותרת הספר מכיל את המילה מהנושא או להיפך
-      return normalizedBookTitle.contains(normalizedTitle) || 
-             normalizedTitle.contains(normalizedBookTitle) ||
-             _containsWords(normalizedBookTitle, normalizedTitle);
+      
+      // בדיקה מדויקת
+      if (normalizedBookTitle == normalizedTitle) return true;
+      
+      // בדיקה אם כותרת הספר מכילה את השם מהרשימה
+      if (normalizedBookTitle.contains(normalizedTitle)) return true;
+      
+      // בדיקה אם השם מהרשימה מכיל את כותרת הספר
+      if (normalizedTitle.contains(normalizedBookTitle)) return true;
+      
+      return false;
     });
-  }
-
-  /// בדיקה אם יש מילים משותפות בין שתי מחרוזות
-  bool _containsWords(String text1, String text2) {
-    final words1 = text1.split(' ').where((w) => w.length > 2).toSet();
-    final words2 = text2.split(' ').where((w) => w.length > 2).toSet();
-    return words1.intersection(words2).isNotEmpty;
   }
 
   /// מחזיר את כל הנושאים שספר מסוים שייך אליהם
