@@ -28,6 +28,7 @@ import 'package:otzaria/widgets/workspace_icon_button.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'package:otzaria/utils/open_book.dart';
 import 'package:otzaria/widgets/generic_settings_dialog.dart';
+import 'package:otzaria/models/custom_topics.dart';
 
 class LibraryBrowser extends StatefulWidget {
   const LibraryBrowser({super.key});
@@ -42,10 +43,20 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   bool get wantKeepAlive => true;
 
   int _depth = 0;
+  final CustomTopicsManager _customTopicsManager = CustomTopicsManager();
   @override
   void initState() {
     super.initState();
     context.read<LibraryBloc>().add(LoadLibrary());
+    _initializeCustomTopics();
+  }
+
+  Future<void> _initializeCustomTopics() async {
+    await _customTopicsManager.loadCustomTopics();
+    // לאחר הטעינה, נעדכן את המסך אם נדרש
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -213,6 +224,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     final allBooks = state.currentCategory!.getAllBooks();
     final allTopics = _getAllTopics(allBooks);
     
+    // נושאים קיימים לפי נתיב הקובץ
     final categoryTopics = [
       "תנך",
       "מדרש",
@@ -231,15 +243,23 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       "מחברי זמננו",
     ];
 
-    final relevantTopics =
+    final relevantCategoryTopics =
         categoryTopics.where((element) => allTopics.contains(element)).toList();
 
-    if (relevantTopics.isEmpty) {
+    // נושאים מותאמים אישית - תמיד נציג אותם (לא תלוי בספרים ספציפיים)
+    final customTopics = _customTopicsManager.topics
+        .map((topic) => topic.displayName)
+        .toList();
+
+    // איחוד הרשימות - נושאים מותאמים אישית יופיעו בתחילת הרשימה
+    final allRelevantTopics = [...customTopics, ...relevantCategoryTopics];
+
+    if (allRelevantTopics.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return _TopicsFilterPopup(
-      relevantTopics: relevantTopics,
+      relevantTopics: allRelevantTopics,
       selectedTopics: state.selectedTopics ?? [],
       onTopicToggle: (topic) {
         final currentTopics = List<String>.from(state.selectedTopics ?? []);
@@ -310,6 +330,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       return const SizedBox.shrink();
     }
 
+    // נושאים קיימים לפי נתיב הקובץ
     final categoryTopics = [
       "תנך",
       "מדרש",
@@ -329,9 +350,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     ];
 
     final allTopics = _getAllTopics(state.searchResults!);
-
-    final relevantTopics =
+    final relevantCategoryTopics =
         categoryTopics.where((element) => allTopics.contains(element)).toList();
+
+    // נושאים מותאמים אישית - תמיד נציג אותם
+    final customTopics = _customTopicsManager.topics
+        .map((topic) => topic.displayName)
+        .toList();
+
+    // איחוד הרשימות - נושאים מותאמים אישית יופיעו בתחילת הרשימה
+    final allRelevantTopics = [...customTopics, ...relevantCategoryTopics];
 
     return FilterListWidget<String>(
       hideSearchField: true,
@@ -347,7 +375,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       },
       validateSelectedItem: (list, item) => list != null && list.contains(item),
       onItemSearch: (item, query) => item == query,
-      listData: relevantTopics,
+      listData: allRelevantTopics,
       selectedListData: state.selectedTopics ?? [],
       choiceChipLabel: (p0) => p0,
       hideSelectedTextCount: true,
@@ -984,6 +1012,7 @@ class _TopicsFilterPopupState extends State<_TopicsFilterPopup> {
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
       constraints: const BoxConstraints(maxHeight: 500, minWidth: 200),
+      offset: const Offset(-180, 0), // מזיז את ה-PIN שמאלה כדי שיתחיל אחרי גבול החלון הימני
       icon: Icon(
         Icons.filter_list,
         color: widget.selectedTopics.isNotEmpty
