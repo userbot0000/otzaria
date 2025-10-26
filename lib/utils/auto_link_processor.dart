@@ -26,12 +26,16 @@ class AutoLinkProcessor {
     bool enableAutoLinks = true,
     bool excludeExistingLinks = true,
   }) {
+    print('AutoLinkProcessor.processText called: enableAutoLinks=$enableAutoLinks, initialized=$_initialized');
+    
     if (!enableAutoLinks) {
+      print('AutoLinkProcessor: Auto links disabled');
       return htmlText;
     }
     
     // אם לא מאותחל, לא נעשה כלום
     if (!_initialized) {
+      print('AutoLinkProcessor: Not initialized!');
       return htmlText;
     }
     
@@ -50,42 +54,41 @@ class AutoLinkProcessor {
       }
       
       final tractates = WordDictionary.instance.getTractates();
-      if (tractates.isEmpty) return htmlText;
+      print('AutoLinkProcessor: Processing text, tractates count: ${tractates.length}');
+      if (tractates.isEmpty) {
+        print('AutoLinkProcessor: No tractates found!');
+        return htmlText;
+      }
       
       // בניית regex לזיהוי כל הפורמטים
       final tractatePattern = tractates.map((t) => RegExp.escape(t)).join('|');
       
-      // דפוס מקיף עם תמיכה בתחיליות, גרשיים, ניקוד וסימני פיסוק
-      // תחיליות אופציונליות: ב, ד, וב לפני שם המסכת
-      // מספר דף: תומך בגרשיים (כ"ג) ובמספרים עבריים עד קעז
-      // התעלמות מסימני פיסוק וניקוד בתוך התבנית
+      // דפוס פשוט יותר - מחפש מסכת + מספר דף
+      // תומך בפורמטים: "ברכות ב", "בברכות דף ב", "ברכות ב א", "ברכות ב."
       final pattern = RegExp(
-        "(?:^|[\\s\\(\\[\\{\"'])" +  // התחלה: תחילת מחרוזת או רווח/סוגריים/מרכאות
-        "(?:[בדו]?ב?)?\\s*" +  // תחיליות אופציונליות: ב, ד, וב
-        '(' + tractatePattern + ')' +  // שם המסכת
-        "(?![א-ת])" +  // וידוא שאחרי שם המסכת אין אות עברית נוספת (מילה שלמה)
-        "[\\s\\u0591-\\u05C7]*" +  // רווחים וניקוד אופציונליים
-        "(?:[\\(\\[])?" +  // סוגר פותח אופציונלי
-        "[\\s\\u0591-\\u05C7]*" +  // רווחים וניקוד אופציונליים
-        "(?:(דף)[\\s\\u0591-\\u05C7]+)?" +  // "דף" אופציונלי עם רווחים וניקוד
-        "([א-ת]{1,3}(?:[\"']\\s*[א-ת])?)" +  // מספר דף: תומך בגרשיים (כ"ג)
-        "[\\s\\u0591-\\u05C7,;:]*" +  // רווחים, ניקוד, פסיקים אופציונליים
-        "(?:[\\(\\[])?" +  // סוגר פותח אופציונלי
-        "[\\s\\u0591-\\u05C7]*" +  // רווחים וניקוד אופציונליים
-        "([א-ב]|ע[\"']\\s*[אב])?" +  // עמוד: א, ב, ע"א, ע"ב
-        "[\\s\\u0591-\\u05C7]*" +  // רווחים וניקוד אופציונליים
-        "(?:[\\)\\]])?" +  // סוגר סוגר אופציונלי
-        "(?=[\\s\\.\\,\\;\\:\\!\\?\\)\\]\\}\"']|\$)",  // סוף: רווח/סימנים/סוף מחרוזת
+        '(?:[בדו]?ב)?\\s*' +  // תחילית אופציונלית
+        '(' + tractatePattern + ')' +  // שם המסכת (קבוצה 1)
+        '(?![א-ת])' +  // ודא שזו מילה שלמה
+        '\\s+' +  // רווח חובה
+        '(?:(דף)\\s+)?' +  // "דף" אופציונלי (קבוצה 2)
+        '([א-ת]{1,3}(?:["\']\\s*[א-ת])?)' +  // מספר דף (קבוצה 3)
+        '(?:\\s+([א-ב]|ע["\']\\s*[אב]))?' +  // עמוד אופציונלי (קבוצה 4)
+        '(?=\\s|\\.|,|:|;|\\)|\\]|<|\$)',  // סוף - רווח או סימן פיסוק או תג HTML
         unicode: true,
         multiLine: true,
       );
       
       String result = htmlText;
+      int matchCount = 0;
       result = result.replaceAllMapped(pattern, (match) {
+        matchCount++;
+        print('AutoLinkProcessor: Found match #$matchCount: ${match.group(0)}');
+        
         // בדיקה שזה לא בתוך קישור קיים
         final beforeMatch = result.substring(0, match.start);
         if (beforeMatch.contains('<a ') && 
             beforeMatch.lastIndexOf('<a ') > beforeMatch.lastIndexOf('</a>')) {
+          print('AutoLinkProcessor: Skipping - inside existing link');
           return match.group(0)!;
         }
         
@@ -95,11 +98,14 @@ class AutoLinkProcessor {
         String pageNum = match.group(3)!;
         final sideStr = match.group(4);
         
+        print('AutoLinkProcessor: Tractate=$tractate, Page=$pageNum, Side=$sideStr');
+        
         // ניקוי גרשיים ורווחים ממספר הדף
         pageNum = _cleanPageNumber(pageNum);
         
         // בדיקה שמספר הדף תקין
         if (!_isValidPageNumber(pageNum)) {
+          print('AutoLinkProcessor: Invalid page number: $pageNum');
           return fullMatch;
         }
         
@@ -122,9 +128,12 @@ class AutoLinkProcessor {
         
         // החזרת הטקסט המקורי עם קישור
         final linkText = fullMatch.trim();
-        return '<a href="$url" class="talmud-ref">$linkText</a>';
+        final linkedText = '<a href="$url" class="talmud-ref">$linkText</a>';
+        print('AutoLinkProcessor: Created link: $linkedText');
+        return linkedText;
       });
       
+      print('AutoLinkProcessor: Total matches found: $matchCount');
       return result;
     } catch (e) {
       print('Error in _processTalmudReferences: $e');
