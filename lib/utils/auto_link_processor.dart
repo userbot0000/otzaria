@@ -55,22 +55,27 @@ class AutoLinkProcessor {
       // בניית regex לזיהוי כל הפורמטים
       final tractatePattern = tractates.map((t) => RegExp.escape(t)).join('|');
       
-      // דפוס מורכב שמזהה את כל הפורמטים:
-      // 1. (ברכות ב, ב) - עם סוגריים ופסיק
-      // 2. ברכות דף ב ע"א - עם "דף" ועמוד
-      // 3. ברכות ט"ז ע"ב - עם גרשיים במספר ועמוד
-      // 4. ברכות דף ג. או ברכות דף ה: - עם נקודה/נקודתיים
+      // דפוס מקיף עם תמיכה בתחיליות, גרשיים, ניקוד וסימני פיסוק
+      // תחיליות אופציונליות: ב, ד, וב לפני שם המסכת
+      // מספר דף: תומך בגרשיים (כ"ג) ובמספרים עבריים עד קעז
+      // התעלמות מסימני פיסוק וניקוד בתוך התבנית
       final pattern = RegExp(
-        r'\(?\s*(' + tractatePattern + r')\s+'  // שם המסכת
-        r'(?:(דף)\s+)?'  // "דף" אופציונלי
-        r'([א-ת]{1,2}"?[א-ת]{0,2}|[0-9]{1,3})'  // מספר דף: עברי (עם או בלי גרשיים) או ערבי
-        r'(?:\s*[,:;]\s*|\s+)'  // מפריד (פסיק, נקודתיים, או רווח)
-        r'(?:'  // התחלת קבוצת עמוד אופציונלית
-          r'([א-ת](?:"[א-ת])?)|'  // עמוד עברי (א, ב, ע"א, ע"ב)
-          r'(ע"[אב])|'  // ע"א או ע"ב
-          r'([\.:])'  // נקודה או נקודתיים
-        r')?'  // סוף קבוצת עמוד אופציונלית
-        r'\)?',  // סוגר אופציונלי
+        r'(?:^|[\s\(\[\{"\'\''])' +  // התחלה: תחילת מחרוזת או רווח/סוגריים/מרכאות
+        r'(?:[בדו]?ב?)?\s*' +  // תחיליות אופציונליות: ב, ד, וב
+        '(' + tractatePattern + ')' +  // שם המסכת
+        r'(?![א-ת])' +  // וידוא שאחרי שם המסכת אין אות עברית נוספת (מילה שלמה)
+        r'[\s\u0591-\u05C7]*' +  // רווחים וניקוד אופציונליים
+        r'(?:[\(\[])?' +  // סוגר פותח אופציונלי
+        r'[\s\u0591-\u05C7]*' +  // רווחים וניקוד אופציונליים
+        r'(?:(דף)[\s\u0591-\u05C7]+)?' +  // "דף" אופציונלי עם רווחים וניקוד
+        r'([א-ת]{1,3}(?:["\']\s*[א-ת])?)' +  // מספר דף: תומך בגרשיים (כ"ג)
+        r'[\s\u0591-\u05C7,;:]*' +  // רווחים, ניקוד, פסיקים אופציונליים
+        r'(?:[\(\[])?' +  // סוגר פותח אופציונלי
+        r'[\s\u0591-\u05C7]*' +  // רווחים וניקוד אופציונליים
+        r'([א-ב]|ע["\']\s*[אב])?' +  // עמוד: א, ב, ע"א, ע"ב
+        r'[\s\u0591-\u05C7]*' +  // רווחים וניקוד אופציונליים
+        r'(?:[\)\]])?' +  // סוגר סוגר אופציונלי
+        r'(?=[\s\.\,\;\:\!\?\)\]\}"\'\'']|$)',  // סוף: רווח/סימנים/סוף מחרוזת
         unicode: true,
         multiLine: true,
       );
@@ -84,46 +89,44 @@ class AutoLinkProcessor {
           return match.group(0)!;
         }
         
+        final fullMatch = match.group(0)!;
         final tractate = match.group(1)!;
-        final hasDafWord = match.group(2) != null;  // האם יש המילה "דף"
-        final pageNum = match.group(3)!;
-        final sideHebrew = match.group(4);  // א, ב, או עם גרשיים
-        final sideWithQuotes = match.group(5);  // ע"א, ע"ב
-        final punctuation = match.group(6);  // . או :
+        final hasDafWord = match.group(2) != null;
+        String pageNum = match.group(3)!;
+        final sideStr = match.group(4);
         
-        // קביעת העמוד
-        String? side;
-        if (sideWithQuotes != null) {
-          side = sideWithQuotes == 'ע"א' ? 'א' : 'ב';
-        } else if (sideHebrew != null) {
-          // הסרת גרשיים אם יש
-          side = sideHebrew.replaceAll('"', '').replaceAll("'", '');
-        } else if (punctuation == '.') {
-          side = 'א';
-        } else if (punctuation == ':') {
-          side = 'ב';
+        // ניקוי גרשיים ורווחים ממספר הדף
+        pageNum = _cleanPageNumber(pageNum);
+        
+        // בדיקה שמספר הדף תקין
+        if (!_isValidPageNumber(pageNum)) {
+          return fullMatch;
         }
         
-        // אם אין עמוד מפורש, נדרוש שתהיה המילה "דף"
-        if (side == null && !hasDafWord) {
-          // ייתכן שזה לא הפניה תלמודית (למשל: "ברכות בזמן")
-          // נבדוק אם מה שאחרי זה נראה כמו מספר
-          if (!_isValidPageNumber(pageNum)) {
-            return match.group(0)!;
+        // קביעת העמוד - ניקוי גרשיים וזיהוי ע"א/ע"ב
+        String? side;
+        if (sideStr != null) {
+          final cleanSide = sideStr.replaceAll(RegExp(r'["\s]'), '');
+          if (cleanSide == 'עא') {
+            side = 'א';
+          } else if (cleanSide == 'עב') {
+            side = 'ב';
+          } else if (sideStr == 'א' || sideStr == 'ב') {
+            side = sideStr;
           }
         }
         
-        // בניית ה-URL
-        final cleanPageNum = pageNum.replaceAll('"', '').replaceAll("'", '');
+        // בניית URL פשוט: רק ספר + דף (+ עמוד אם יש)
         String url;
         if (side != null) {
-          url = 'book://$tractate#$cleanPageNum $side';
+          url = 'book://$tractate#$pageNum $side';
         } else {
-          url = 'book://$tractate#$cleanPageNum';
+          url = 'book://$tractate#$pageNum';
         }
         
-        final originalText = match.group(0)!;
-        return '<a href="$url" class="talmud-ref">$originalText</a>';
+        // החזרת הטקסט המקורי עם קישור
+        final linkText = fullMatch.trim();
+        return '<a href="$url" class="talmud-ref">$linkText</a>';
       });
       
       return result;
@@ -133,16 +136,28 @@ class AutoLinkProcessor {
     }
   }
   
+  /// מנקה מספר דף מגרשיים ורווחים (כ"ג -> כג)
+  String _cleanPageNumber(String pageNum) {
+    return pageNum.replaceAll(RegExp(r'["\'\\s]'), '');
+  }
+  
   /// בודק אם מחרוזת היא מספר דף תקין
   bool _isValidPageNumber(String pageNum) {
-    // בדיקה אם זה מספר עברי (אותיות עבריות)
-    if (RegExp(r'^[א-ת]+$', unicode: true).hasMatch(pageNum)) {
+    // קבלת רשימת מספרי הדפים התקינים מהמילון
+    final validPages = WordDictionary.instance.getValidPageNumbers();
+    
+    // בדיקה אם זה מספר עברי תקין
+    if (validPages.contains(pageNum)) {
       return true;
     }
-    // בדיקה אם זה מספר ערבי
-    if (RegExp(r'^[0-9]+$').hasMatch(pageNum)) {
-      return true;
+    
+    // בדיקה אם זה מספר ערבי (1-120 בערך)
+    final numPattern = RegExp(r'^[0-9]+$');
+    if (numPattern.hasMatch(pageNum)) {
+      final num = int.tryParse(pageNum);
+      return num != null && num >= 1 && num <= 120;
     }
+    
     return false;
   }
   
@@ -170,106 +185,6 @@ class AutoLinkProcessor {
     if (lastIndex < htmlText.length) {
       final textAfter = htmlText.substring(lastIndex);
       buffer.write(_processTalmudReferences(textAfter, false));
-    }
-    
-    return buffer.toString();
-  }
-  
-  /// מעבד טקסט פשוט ללא קישורים קיימים
-  String _processTextSimple(String htmlText) {
-    try {
-      String result = htmlText;
-      final dictionary = WordDictionary.instance.getAllWords();
-      
-      // ממיין את המילים לפי אורך (הארוכות ביותר קודם) כדי למנוע התנגשויות
-      final sortedWords = dictionary.keys.toList()
-        ..sort((a, b) => b.length.compareTo(a.length));
-      
-      // עובר על כל המילים במילון
-      for (final word in sortedWords) {
-        final link = dictionary[word]!;
-        
-        // escape תווים מיוחדים ב-regex
-        final escapedWord = RegExp.escape(word);
-        
-        // בונה ביטוי רגולרי פשוט יותר
-        String pattern;
-        if (link.wholeWordOnly) {
-          // התאמה למילה שלמה - מוקפת ברווחים, סימני פיסוק או תחילת/סוף
-          pattern = '(^|[\\s>])($escapedWord)([\\s<,.;:!?"\']|\$)';
-        } else {
-          // התאמה חלקית
-          pattern = escapedWord;
-        }
-        
-        try {
-          final regex = RegExp(
-            pattern,
-            caseSensitive: link.caseSensitive,
-            unicode: true,
-            multiLine: true,
-          );
-          
-          // מחליף את המילה בקישור
-          result = result.replaceAllMapped(regex, (match) {
-            if (link.wholeWordOnly) {
-              // יש לנו 3 קבוצות: prefix, word, suffix
-              final prefix = match.group(1) ?? '';
-              final matchedText = match.group(2) ?? word;
-              final suffix = match.group(3) ?? '';
-              
-              // בודק שהמילה לא כבר בתוך קישור
-              final beforeMatch = result.substring(0, match.start);
-              if (beforeMatch.contains('<a ') && 
-                  beforeMatch.lastIndexOf('<a ') > beforeMatch.lastIndexOf('</a>')) {
-                return match.group(0)!;
-              }
-              
-              final url = link.createUrl();
-              return '$prefix<a href="$url" class="auto-link">$matchedText</a>$suffix';
-            } else {
-              final matchedText = match.group(0)!;
-              final url = link.createUrl();
-              return '<a href="$url" class="auto-link">$matchedText</a>';
-            }
-          });
-        } catch (e) {
-          print('Error processing word "$word": $e');
-          continue;
-        }
-      }
-      
-      return result;
-    } catch (e) {
-      print('Error in _processTextSimple: $e');
-      return htmlText; // במקרה של שגיאה, מחזיר את הטקסט המקורי
-    }
-  }
-  
-  /// מעבד טקסט עם קישורים קיימים (לא נוגע בתוכן של תגי <a>)
-  String _processTextWithExistingLinks(String htmlText) {
-    final buffer = StringBuffer();
-    int lastIndex = 0;
-    
-    // מוצא את כל תגי ה-<a>
-    final linkPattern = RegExp(r'<a\s[^>]*>.*?</a>', dotAll: true);
-    final matches = linkPattern.allMatches(htmlText);
-    
-    for (final match in matches) {
-      // מעבד את הטקסט לפני הקישור
-      final textBefore = htmlText.substring(lastIndex, match.start);
-      buffer.write(_processTextSimple(textBefore));
-      
-      // מוסיף את הקישור הקיים כמו שהוא
-      buffer.write(match.group(0));
-      
-      lastIndex = match.end;
-    }
-    
-    // מעבד את הטקסט אחרי הקישור האחרון
-    if (lastIndex < htmlText.length) {
-      final textAfter = htmlText.substring(lastIndex);
-      buffer.write(_processTextSimple(textAfter));
     }
     
     return buffer.toString();
