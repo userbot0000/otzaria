@@ -13,6 +13,7 @@ class WordDictionary {
   List<String>? _validPageNumbers;
   List<String>? _tanakhBooks;
   List<String>? _mishnaOrders;
+  List<String>? _validChapterNumbers;
   
   /// טוען את המילון מקובץ JSON
   Future<void> loadDictionary() async {
@@ -47,6 +48,12 @@ class WordDictionary {
         _mishnaOrders = _getDefaultMishnaOrders();
       }
       
+      if (jsonData.containsKey('valid_chapter_numbers')) {
+        _validChapterNumbers = List<String>.from(jsonData['valid_chapter_numbers']);
+      } else {
+        _validChapterNumbers = _getDefaultValidChapterNumbers();
+      }
+      
       // יצירת מילון ריק - לא נשתמש בו יותר
       _dictionary = {};
     } catch (e) {
@@ -55,6 +62,7 @@ class WordDictionary {
       _validPageNumbers = _getDefaultValidPageNumbers();
       _tanakhBooks = _getDefaultTanakhBooks();
       _mishnaOrders = _getDefaultMishnaOrders();
+      _validChapterNumbers = _getDefaultValidChapterNumbers();
       _dictionary = {};
     }
   }
@@ -130,6 +138,24 @@ class WordDictionary {
     ];
   }
 
+  /// מחזיר רשימת מספרי פרקים תקינים ברירת מחדל (א-קיט)
+  List<String> _getDefaultValidChapterNumbers() {
+    return [
+      'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י',
+      'יא', 'יב', 'יג', 'יד', 'טו', 'טז', 'יז', 'יח', 'יט', 'כ',
+      'כא', 'כב', 'כג', 'כד', 'כה', 'כו', 'כז', 'כח', 'כט', 'ל',
+      'לא', 'לב', 'לג', 'לד', 'לה', 'לו', 'לז', 'לח', 'לט', 'מ',
+      'מא', 'מב', 'מג', 'מד', 'מה', 'מו', 'מז', 'מח', 'מט', 'נ',
+      'נא', 'נב', 'נג', 'נד', 'נה', 'נו', 'נז', 'נח', 'נט', 'ס',
+      'סא', 'סב', 'סג', 'סד', 'סה', 'סו', 'סז', 'סח', 'סט', 'ע',
+      'עא', 'עב', 'עג', 'עד', 'עה', 'עו', 'עז', 'עח', 'עט', 'פ',
+      'פא', 'פב', 'פג', 'פד', 'פה', 'פו', 'פז', 'פח', 'פט', 'צ',
+      'צא', 'צב', 'צג', 'צד', 'צה', 'צו', 'צז', 'צח', 'צט', 'ק',
+      'קא', 'קב', 'קג', 'קד', 'קה', 'קו', 'קז', 'קח', 'קט', 'קי',
+      'קיא', 'קיב', 'קיג', 'קיד', 'קטו', 'קטז', 'קיז', 'קיח', 'קיט'
+    ];
+  }
+
   /// מחזיר את רשימת המסכתות
   List<String> getTractates() {
     return List.from(_tractates ?? []);
@@ -148,6 +174,11 @@ class WordDictionary {
   /// מחזיר את רשימת מסכתות המשנה
   List<String> getMishnaOrders() {
     return List.from(_mishnaOrders ?? []);
+  }
+
+  /// מחזיר את רשימת מספרי הפרקים התקינים
+  List<String> getValidChapterNumbers() {
+    return List.from(_validChapterNumbers ?? []);
   }
   
   /// מחפש קישור למילה

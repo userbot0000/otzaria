@@ -177,6 +177,26 @@ class AutoLinkProcessor {
     
     return false;
   }
+
+  /// בודק אם מחרוזת היא מספר פרק תקין
+  bool _isValidChapterNumber(String chapterNum) {
+    // קבלת רשימת מספרי הפרקים התקינים מהמילון
+    final validChapters = WordDictionary.instance.getValidChapterNumbers();
+    
+    // בדיקה אם זה מספר עברי תקין
+    if (validChapters.contains(chapterNum)) {
+      return true;
+    }
+    
+    // בדיקה אם זה מספר ערבי (1-119 בערך)
+    final numPattern = RegExp(r'^[0-9]+$');
+    if (numPattern.hasMatch(chapterNum)) {
+      final num = int.tryParse(chapterNum);
+      return num != null && num >= 1 && num <= 119;
+    }
+    
+    return false;
+  }
   
   /// מעבד טקסט עם קישורים קיימים - לא נוגע בתוכן של תגי <a>
   String _processTalmudWithExistingLinks(String htmlText) {
@@ -277,6 +297,11 @@ class AutoLinkProcessor {
         }
         
         if (chapter == null) {
+          return fullMatch;
+        }
+        
+        // בדיקה שמספר הפרק תקין
+        if (!_isValidChapterNumber(chapter)) {
           return fullMatch;
         }
         
@@ -395,6 +420,11 @@ class AutoLinkProcessor {
         }
         
         if (chapter == null) {
+          return fullMatch;
+        }
+        
+        // בדיקה שמספר הפרק תקין
+        if (!_isValidChapterNumber(chapter)) {
           return fullMatch;
         }
         
