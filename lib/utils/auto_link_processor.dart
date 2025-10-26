@@ -26,16 +26,12 @@ class AutoLinkProcessor {
     bool enableAutoLinks = true,
     bool excludeExistingLinks = true,
   }) {
-    print('AutoLinkProcessor.processText called: enableAutoLinks=$enableAutoLinks, initialized=$_initialized');
-    
     if (!enableAutoLinks) {
-      print('AutoLinkProcessor: Auto links disabled');
       return htmlText;
     }
     
     // אם לא מאותחל, לא נעשה כלום
     if (!_initialized) {
-      print('AutoLinkProcessor: Not initialized!');
       return htmlText;
     }
     
@@ -48,15 +44,13 @@ class AutoLinkProcessor {
   /// מזהה ומקשר הפניות תלמודיות בפורמטים שונים
   String _processTalmudReferences(String htmlText, bool excludeExistingLinks) {
     try {
-      // אם הטקסט כבר מכיל קישורים, נפצל ונעבד רק חלקים ללא קישורים
-      if (excludeExistingLinks && htmlText.contains('<a ')) {
+      // אם הטקסט כבר מכיל קישורים תלמודיים (class="talmud-ref"), נפצל ונעבד רק חלקים ללא קישורים
+      if (excludeExistingLinks && htmlText.contains('class="talmud-ref"')) {
         return _processTalmudWithExistingLinks(htmlText);
       }
       
       final tractates = WordDictionary.instance.getTractates();
-      print('AutoLinkProcessor: Processing text, tractates count: ${tractates.length}');
       if (tractates.isEmpty) {
-        print('AutoLinkProcessor: No tractates found!');
         return htmlText;
       }
       
@@ -79,16 +73,11 @@ class AutoLinkProcessor {
       );
       
       String result = htmlText;
-      int matchCount = 0;
       result = result.replaceAllMapped(pattern, (match) {
-        matchCount++;
-        print('AutoLinkProcessor: Found match #$matchCount: ${match.group(0)}');
-        
-        // בדיקה שזה לא בתוך קישור קיים
+        // בדיקה שזה לא בתוך תג HTML או קישור קיים
         final beforeMatch = result.substring(0, match.start);
         if (beforeMatch.contains('<a ') && 
             beforeMatch.lastIndexOf('<a ') > beforeMatch.lastIndexOf('</a>')) {
-          print('AutoLinkProcessor: Skipping - inside existing link');
           return match.group(0)!;
         }
         
@@ -98,14 +87,11 @@ class AutoLinkProcessor {
         String pageNum = match.group(3)!;
         final sideStr = match.group(4);
         
-        print('AutoLinkProcessor: Tractate=$tractate, Page=$pageNum, Side=$sideStr');
-        
         // ניקוי גרשיים ורווחים ממספר הדף
         pageNum = _cleanPageNumber(pageNum);
         
         // בדיקה שמספר הדף תקין
         if (!_isValidPageNumber(pageNum)) {
-          print('AutoLinkProcessor: Invalid page number: $pageNum');
           return fullMatch;
         }
         
@@ -117,26 +103,29 @@ class AutoLinkProcessor {
             side = 'א';
           } else if (cleanSide == 'עב') {
             side = 'ב';
-          } else if (sideStr == 'א' || sideStr == 'ב') {
-            side = sideStr;
+          } else if (cleanSide == 'א' || cleanSide == 'ב') {
+            side = cleanSide;
           }
         }
         
-        // בניית URL עם "דף" - תמיד נשתמש רק במספר הדף ללא עמוד
-        // כך שאם העמוד לא נכון, עדיין נפתח את הדף הנכון
+        // בניית URL עם "דף" ועמוד אם קיים
+        // פורמט תוכן העניינים: "דף X." = עמוד א, "דף X:" = עמוד ב
         String url = 'book://$tractate#דף $pageNum';
+        if (side != null) {
+          if (side == 'א') {
+            url = 'book://$tractate#דף $pageNum.';
+          } else if (side == 'ב') {
+            url = 'book://$tractate#דף $pageNum:';
+          }
+        }
         
         // החזרת הטקסט המקורי עם קישור
         final linkText = fullMatch.trim();
-        final linkedText = '<a href="$url" class="talmud-ref">$linkText</a>';
-        print('AutoLinkProcessor: Created link: $linkedText');
-        return linkedText;
+        return '<a href="$url" class="talmud-ref">$linkText</a>';
       });
       
-      print('AutoLinkProcessor: Total matches found: $matchCount');
       return result;
     } catch (e) {
-      print('Error in _processTalmudReferences: $e');
       return htmlText;
     }
   }
