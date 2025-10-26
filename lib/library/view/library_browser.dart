@@ -118,7 +118,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                           .text
                           .length >
                       2)
-                    _buildTopicsSelection(context, state, settingsState),
+                    _buildTopicsSelection(context, state, settingsState)
+                  else
+                    _buildTopicsFilter(context, state),
                   Expanded(child: _buildContent(state)),
                 ],
               ),
@@ -189,6 +191,126 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             borderRadius: BorderRadius.circular(12),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTopicsFilter(BuildContext context, LibraryState state) {
+    if (state.currentCategory == null) {
+      return const SizedBox.shrink();
+    }
+
+    final allBooks = state.currentCategory!.getAllBooks();
+    final allTopics = _getAllTopics(allBooks);
+    
+    final categoryTopics = [
+      "תנך",
+      "מדרש",
+      "משנה",
+      "תלמוד בבלי",
+      "תלמוד ירושלמי",
+      "הלכה",
+      "משנה תורה",
+      "שולחן ערוך",
+      "חסידות",
+      "קבלה",
+      "ספרי מוסר",
+      "שות",
+      "ראשונים",
+      "אחרונים",
+      "מחברי זמננו",
+    ];
+
+    final relevantTopics =
+        categoryTopics.where((element) => allTopics.contains(element)).toList();
+
+    if (relevantTopics.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: Row(
+        children: [
+          PopupMenuButton<String>(
+            icon: Icon(
+              Icons.filter_list,
+              color: (state.selectedTopics?.isNotEmpty ?? false)
+                  ? Theme.of(context).colorScheme.primary
+                  : null,
+            ),
+            tooltip: 'סינון לפי נושאים',
+            onSelected: (String topic) {
+              final currentTopics = List<String>.from(state.selectedTopics ?? []);
+              if (!currentTopics.contains(topic)) {
+                currentTopics.add(topic);
+                context.read<LibraryBloc>().add(FilterBooksByTopics(currentTopics));
+              }
+            },
+            itemBuilder: (BuildContext context) {
+              return relevantTopics.map((String topic) {
+                final isSelected = state.selectedTopics?.contains(topic) ?? false;
+                return PopupMenuItem<String>(
+                  value: topic,
+                  enabled: !isSelected,
+                  child: Row(
+                    children: [
+                      if (isSelected)
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      if (isSelected) const SizedBox(width: 8),
+                      Text(
+                        topic,
+                        style: TextStyle(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList();
+            },
+          ),
+          Expanded(
+            child: Wrap(
+              spacing: 8.0,
+              runSpacing: 4.0,
+              children: (state.selectedTopics ?? []).map((topic) {
+                return Chip(
+                  label: Text(topic),
+                  deleteIcon: const Icon(Icons.close, size: 18),
+                  onDeleted: () {
+                    final currentTopics = List<String>.from(state.selectedTopics ?? []);
+                    currentTopics.remove(topic);
+                    context.read<LibraryBloc>().add(FilterBooksByTopics(currentTopics));
+                  },
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  labelStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    fontSize: 13,
+                  ),
+                  deleteIconColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                );
+              }).toList(),
+            ),
+          ),
+          if (state.selectedTopics?.isNotEmpty ?? false)
+            TextButton.icon(
+              onPressed: () {
+                context.read<LibraryBloc>().add(const FilterBooksByTopics([]));
+              },
+              icon: const Icon(Icons.clear_all, size: 18),
+              label: const Text('נקה הכל'),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -315,6 +437,19 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   Future<List<Widget>> _buildCategoryContent(Category category) async {
     List<Widget> items = [];
+
+    // אם יש סינון לפי נושאים, נציג רק את הספרים המסוננים
+    final state = context.read<LibraryBloc>().state;
+    if (state.filteredBooks != null && state.filteredBooks!.isNotEmpty) {
+      items.add(
+        MyGridView(
+          items: Future.value(
+            state.filteredBooks!.map((book) => _buildBookItem(book, showTopics: true)).toList(),
+          ),
+        ),
+      );
+      return items;
+    }
 
     category.books.sort((a, b) => a.order.compareTo(b.order));
     category.subCategories.sort((a, b) => a.order.compareTo(b.order));
