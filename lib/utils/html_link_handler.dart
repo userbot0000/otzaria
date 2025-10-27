@@ -253,9 +253,13 @@ class HtmlLinkHandler {
       if (context.mounted) {
         // קבלת שם הכותרת לתצוגה באמצעות IndexMapper
         final headerName = await IndexMapper.instance.getRefFromIndex(state.book.title, targetIndex);
+        final displayText = headerName != null 
+            ? 'נווט ל: $headerName'
+            : 'נווט לאינדקס $targetIndex';
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('נווט לאינדקס $targetIndex: ${headerName ?? 'לא ידוע'}'),
+            content: Text(displayText),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -362,11 +366,20 @@ class HtmlLinkHandler {
         startIndex = targetIndex;
         
         if (context.mounted) {
-          // קבלת שם הכותרת לתצוגה באמצעות IndexMapper
-          final headerName = await IndexMapper.instance.getRefFromIndex(bookTitle, targetIndex);
+          // השתמש ב-fallback header אם יש, אחרת נסה IndexMapper
+          String displayText;
+          if (fallbackHeader != null && fallbackHeader.isNotEmpty) {
+            displayText = 'פותח ספר: $bookTitle - $fallbackHeader';
+          } else {
+            final headerName = await IndexMapper.instance.getRefFromIndex(bookTitle, targetIndex);
+            displayText = headerName != null 
+                ? 'פותח ספר: $bookTitle - $headerName'
+                : 'פותח ספר: $bookTitle באינדקס $targetIndex';
+          }
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('פותח ספר: $bookTitle באינדקס $targetIndex${headerName != null ? ' - $headerName' : ''}'),
+              content: Text(displayText),
               duration: const Duration(seconds: 2),
             ),
           );

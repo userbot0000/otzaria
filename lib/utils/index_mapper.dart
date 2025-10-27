@@ -16,6 +16,15 @@ class IndexMapper {
   final Map<String, Map<String, int>> _bookRefToIndexCache = {};
   final Map<String, Map<int, String>> _bookIndexToRefCache = {};
   
+  /// מקבל אינדקס מדויק מהפניה (סינכרוני - רק מ-cache)
+  /// 
+  /// פונקציה מהירה שמחזירה אינדקס רק אם הוא כבר קיים ב-cache
+  /// לשימוש במקומות שבהם אנחנו לא יכולים לחכות לטעינה אסינכרונית
+  int? getIndexFromRefSync(String bookTitle, String ref) {
+    final bookCache = _bookRefToIndexCache[bookTitle];
+    return bookCache?[ref];
+  }
+  
   /// מקבל אינדקס מדויק מהפניה (מקצועי)
   /// 
   /// דוגמאות:
@@ -76,6 +85,11 @@ class IndexMapper {
       _bookIndexToRefCache[bookTitle] ??= {};
       _bookIndexToRefCache[bookTitle]![index] = ref;
       
+      // אם הפניה ריקה או זהה לשם הספר, נחזיר null
+      if (ref.isEmpty || ref == bookTitle) {
+        return null;
+      }
+      
       return ref;
       
     } catch (e) {
@@ -132,6 +146,34 @@ class IndexMapper {
   void clearAllCache() {
     _bookRefToIndexCache.clear();
     _bookIndexToRefCache.clear();
+  }
+  
+  /// טוען מראש ספרים פופולריים לשיפור ביצועים
+  Future<void> preloadPopularBooks() async {
+    const popularBooks = [
+      'ברכות', 'שבת', 'עירובין', 'פסחים', 'יומא', 'סוכה', 'ביצה', 'ראש השנה',
+      'בראשית', 'שמות', 'ויקרא', 'במדבר', 'דברים',
+      'תהילים', 'משלי', 'איוב', 'אסתר', 'דניאל',
+      'משנה ברכות', 'משנה שבת', 'משנה פסחים'
+    ];
+    
+    try {
+      final library = await DataRepository.instance.library;
+      
+      for (final bookTitle in popularBooks) {
+        try {
+          final book = await library.findBookByTitle(bookTitle, TextBook);
+          if (book != null && book is TextBook) {
+            await _buildBookMapping(book);
+          }
+        } catch (e) {
+          // אם ספר ספציפי נכשל, נמשיך לבאים
+          continue;
+        }
+      }
+    } catch (e) {
+      // שגיאה כללית - לא נעשה כלום
+    }
   }
   
   /// מקבל סטטיסטיקות על ה-cache (לדיבוג)

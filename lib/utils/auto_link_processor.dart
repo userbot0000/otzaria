@@ -18,7 +18,25 @@ class AutoLinkProcessor {
     await WordDictionary.instance.loadDictionary();
     final wordCount = WordDictionary.instance.getAllWords().length;
     print('AutoLinkProcessor: Initialized with $wordCount words');
+    
+    // טעינה מוקדמת של ספרים פופולריים ברקע
+    _preloadPopularBooksInBackground();
+    
     _initialized = true;
+  }
+  
+  /// טוען ספרים פופולריים ברקע (לא חוסם את האתחול)
+  void _preloadPopularBooksInBackground() {
+    Future.delayed(Duration(seconds: 1), () async {
+      try {
+        print('AutoLinkProcessor: Starting background preload...');
+        await IndexMapper.instance.preloadPopularBooks();
+        final stats = IndexMapper.instance.getCacheStats();
+        print('AutoLinkProcessor: Preloaded ${stats['books_cached']} books with ${stats['total_ref_mappings']} mappings');
+      } catch (e) {
+        print('AutoLinkProcessor: Background preload failed: $e');
+      }
+    });
   }
   
   /// מעבד טקסט HTML ומוסיף קישורים אוטומטיים למילים במילון
@@ -46,6 +64,114 @@ class AutoLinkProcessor {
     result = _processMishnaReferences(result, excludeExistingLinks);
     
     return result;
+  }
+  
+  /// משדרג קישורים קיימים עם אינדקסים מדויקים (אסינכרוני)
+  /// 
+  /// פונקציה זו לוקחת HTML עם קישורים בפורמט fallback ומשדרגת אותם
+  /// לקישורים מקצועיים עם אינדקסים מדויקים
+  Future<String> upgradeLinksWithIndices(String htmlText) async {
+    try {
+      String result = htmlText;
+      
+      // שדרוג קישורי תלמוד
+      result = await _upgradeLinksWithIndicesInternal(
+        result, 
+        r'<a href="book://([^#]+)#([^"]+)" class="talmud-ref"',
+        _upgradeTalmudLink
+      );
+      
+      // שדרוג קישורי תנ"ך
+      result = await _upgradeLinksWithIndicesInternal(
+        result, 
+        r'<a href="book://([^#]+)#([^"]+)" class="tanakh-ref"',
+        _upgradeTanakhLink
+      );
+      
+      // שדרוג קישורי משנה
+      result = await _upgradeLinksWithIndicesInternal(
+        result, 
+        r'<a href="book://([^#]+)#([^"]+)" class="mishna-ref"',
+        _upgradeMishnaLink
+      );
+      
+      return result;
+    } catch (e) {
+      return htmlText; // במקרה של שגיאה, נחזיר את הטקסט המקורי
+    }
+  }
+  
+  /// פונקציה עזר לשדרוג קישורים
+  Future<String> _upgradeLinksWithIndicesInternal(
+    String htmlText, 
+    String pattern, 
+    Future<String?> Function(String bookTitle, String ref) upgradeFunction
+  ) async {
+    final regex = RegExp(pattern);
+    final matches = regex.allMatches(htmlText).toList();
+    
+    String result = htmlText;
+    
+    // עיבוד בסדר הפוך כדי לא לפגוע באינדקסים
+    for (int i = matches.length - 1; i >= 0; i--) {
+      final match = matches[i];
+      final bookTitle = match.group(1)!;
+      final ref = match.group(2)!;
+      
+      final upgradedUrl = await upgradeFunction(bookTitle, ref);
+      if (upgradedUrl != null) {
+        // החלפת ה-URL בקישור
+        final oldHref = 'book://$bookTitle#$ref';
+        final newHref = upgradedUrl;
+        
+        result = result.replaceRange(
+          match.start, 
+          match.end, 
+          match.group(0)!.replaceFirst(oldHref, newHref)
+        );
+      }
+    }
+    
+    return result;
+  }
+  
+  /// משדרג קישור תלמודי עם אינדקס מדויק
+  Future<String?> _upgradeTalmudLink(String tractate, String ref) async {
+    try {
+      final index = await IndexMapper.instance.getIndexFromRef(tractate, ref);
+      if (index != null) {
+        return 'book://$tractate@$index#$ref';
+      }
+    } catch (e) {
+      // שגיאה - נשאיר את הקישור הישן
+    }
+    return null;
+  }
+  
+  /// משדרג קישור תנ"ך עם אינדקס מדויק
+  Future<String?> _upgradeTanakhLink(String bookName, String ref) async {
+    try {
+      final index = await IndexMapper.instance.getIndexFromRef(bookName, ref);
+      if (index != null) {
+        return 'book://$bookName@$index#$ref';
+      }
+    } catch (e) {
+      // שגיאה - נשאיר את הקישור הישן
+    }
+    return null;
+  }
+  
+  /// משדרג קישור משנה עם אינדקס מדויק
+  Future<String?> _upgradeMishnaLink(String tractate, String ref) async {
+    try {
+      final index = await IndexMapper.instance.getIndexFromRef(tractate, ref);
+      if (index != null) {
+        return 'book://$tractate@$index#$ref';
+      }
+    } catch (e) {
+      // שגיאה - נשאיר את הקישור הישן
+    }
+    return null;
   }
   
   /// מזהה ומקשר הפניות תלמודיות בפורמטים שונים
@@ -133,7 +259,6 @@ class AutoLinkProcessor {
         }
         
         // בניית URL מקצועי עם fallback לכותרת
-        // לעת עתה נשתמש בפורמט עם fallback בלבד (מיפוי האינדקסים יתווסף בעתיד)
         String fallbackRef = 'דף $pageNum';
         if (side != null) {
           if (side == 'א') {
@@ -143,7 +268,8 @@ class AutoLinkProcessor {
           }
         }
         
-        // קישור עם fallback (האינדקס המדויק יתווסף בעתיד)
+        // ניסיון לקבל אינדקס מדויק (אסינכרוני - נעשה בעתיד)
+        // לעת עתה נשתמש בפורמט עם fallback
         final url = 'book://$tractate#$fallbackRef';
         
         // החזרת הטקסט המקורי עם קישור
