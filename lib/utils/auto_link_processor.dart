@@ -1,4 +1,5 @@
 import 'package:otzaria/utils/word_dictionary.dart';
+import 'package:otzaria/utils/index_mapper.dart';
 
 /// מעבד טקסט והוסף קישורים אוטומטיים למילים במילון
 class AutoLinkProcessor {
@@ -76,15 +77,15 @@ class AutoLinkProcessor {
           // פורמט עם סוגריים: מסכת (דף, עמוד) או מסכת (דף עמוד) או מסכת (דף)
           '\\s*\\(\\s*' +  // סוגר פותח עם רווחים אופציונליים
           '(?:(דף)\\s+)?' +  // "דף" אופציונלי (קבוצה 2)
-          '([א-ת]{1,3}(?:["\']\\s*[א-ת])?)' +  // מספר דף (קבוצה 3)
-          '(?:(?:,\\s*|\\s+)([א-ב]|ע["\']\\s*[אב]))?' +  // עמוד אופציונלי עם פסיק או רווח (קבוצה 4)
+          '([א-ת]{1,3}(?:[\"\\x27]\\s*[א-ת])?)' +  // מספר דף (קבוצה 3)
+          '(?:(?:,\\s*|\\s+)([א-ב]|ע[\"\\x27]\\s*[אב]))?' +  // עמוד אופציונלי עם פסיק או רווח (קבוצה 4)
           '\\s*\\)' +  // סוגר סוגר
         '|' +  // או
           // פורמט רגיל: מסכת דף, עמוד או מסכת דף עמוד
           '\\s+' +  // רווח חובה
           '(?:(דף)\\s+)?' +  // "דף" אופציונלי (קבוצה 5)
-          '([א-ת]{1,3}(?:["\']\\s*[א-ת])?)' +  // מספר דף (קבוצה 6)
-          '(?:(?:,\\s*|\\s+)([א-ב]|ע["\']\\s*[אב]))?' +  // עמוד אופציונלי עם פסיק או רווח (קבוצה 7)
+          '([א-ת]{1,3}(?:[\"\\x27]\\s*[א-ת])?)' +  // מספר דף (קבוצה 6)
+          '(?:(?:,\\s*|\\s+)([א-ב]|ע[\"\\x27]\\s*[אב]))?' +  // עמוד אופציונלי עם פסיק או רווח (קבוצה 7)
         ')' +
         '(?=\\s|\\.|,|:|;|\\)|\\]|<|\$)',  // סוף - רווח או סימן פיסוק או תג HTML
         unicode: true,
@@ -121,7 +122,7 @@ class AutoLinkProcessor {
         // קביעת העמוד - ניקוי גרשיים וזיהוי ע"א/ע"ב
         String? side;
         if (sideStr != null) {
-          final cleanSide = sideStr.replaceAll(RegExp(r'["\'\s]'), '');
+          final cleanSide = sideStr.replaceAll(RegExp(r'["\x27\s]'), '');
           if (cleanSide == 'עא') {
             side = 'א';
           } else if (cleanSide == 'עב') {
@@ -131,20 +132,23 @@ class AutoLinkProcessor {
           }
         }
         
-        // בניית URL עם "דף" ועמוד אם קיים
-        // פורמט תוכן העניינים: "דף X." = עמוד א, "דף X:" = עמוד ב
-        String url = 'book://$tractate#דף $pageNum';
+        // בניית URL מקצועי עם fallback לכותרת
+        // לעת עתה נשתמש בפורמט עם fallback בלבד (מיפוי האינדקסים יתווסף בעתיד)
+        String fallbackRef = 'דף $pageNum';
         if (side != null) {
           if (side == 'א') {
-            url = 'book://$tractate#דף $pageNum.';
+            fallbackRef = 'דף $pageNum.';
           } else if (side == 'ב') {
-            url = 'book://$tractate#דף $pageNum:';
+            fallbackRef = 'דף $pageNum:';
           }
         }
         
+        // קישור עם fallback (האינדקס המדויק יתווסף בעתיד)
+        final url = 'book://$tractate#$fallbackRef';
+        
         // החזרת הטקסט המקורי עם קישור
         final linkText = fullMatch.trim();
-        return '<a href="$url" class="talmud-ref">$linkText</a>';
+        return '<a href="$url" class="talmud-ref" data-ref="$fallbackRef">$linkText</a>';
       });
       
       return result;
@@ -156,7 +160,7 @@ class AutoLinkProcessor {
   /// מנקה מספר דף מגרשיים ורווחים (כ"ג -> כג)
   String _cleanPageNumber(String pageNum) {
     // מסיר גרשיים ורווחים, אבל שומר על המבנה של מספרים עבריים
-    return pageNum.replaceAll(RegExp(r'["\'\s]'), '');
+    return pageNum.replaceAll(RegExp(r'["\x27\s]'), '');
   }
   
   /// בודק אם מחרוזת היא מספר דף תקין
@@ -177,6 +181,52 @@ class AutoLinkProcessor {
     }
     
     return false;
+  }
+
+  /// מקבל את האינדקס המדויק של דף תלמודי (מקצועי)
+  Future<int?> _getTalmudPageIndex(String tractate, String pageNum, String? side) async {
+    try {
+      // בניית הפניה המדויקת
+      String ref = 'דף $pageNum';
+      if (side != null) {
+        if (side == 'א') {
+          ref = 'דף $pageNum.';
+        } else if (side == 'ב') {
+          ref = 'דף $pageNum:';
+        }
+      }
+      
+      // שימוש ב-IndexMapper המקצועי
+      return await IndexMapper.instance.getIndexFromRef(tractate, ref);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// מקבל את האינדקס המדויק של פרק תנ"ך (מקצועי)
+  Future<int?> _getTanakhChapterIndex(String bookName, String chapter) async {
+    try {
+      // בניית הפניה המדויקת
+      final ref = 'פרק $chapter';
+      
+      // שימוש ב-IndexMapper המקצועי
+      return await IndexMapper.instance.getIndexFromRef(bookName, ref);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// מקבל את האינדקס המדויק של פרק משנה (מקצועי)
+  Future<int?> _getMishnaChapterIndex(String tractate, String chapter) async {
+    try {
+      // בניית הפניה המדויקת
+      final ref = 'פרק $chapter';
+      
+      // שימוש ב-IndexMapper המקצועי
+      return await IndexMapper.instance.getIndexFromRef(tractate, ref);
+    } catch (e) {
+      return null;
+    }
   }
 
   /// בודק אם מחרוזת היא מספר פרק תקין
@@ -270,16 +320,16 @@ class AutoLinkProcessor {
         r'\s+' +  // רווח חובה
         r'(?:' +  // התחלת קבוצה לא לוכדת עבור כל הפורמטים
           // פורמט עם "פרק" ו"פסוק" מפורש
-          r'פרק\s+([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 2)
-          r'(?:\s+פסוק\s+([א-ת]{1,3}|[0-9]{1,3}))?' +  // פסוק אופציונלי (קבוצה 3)
+          r'פרק\s+([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3})' +  // פרק (קבוצה 2)
+          r'(?:\s+פסוק\s+([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3}))?' +  // פסוק אופציונלי (קבוצה 3)
         r'|' +  // או
           // פורמט עם קיצורים פ"א פ"ב
-          r'פ"([א-ת]{1,3}|[0-9]{1,3})' +  // פרק מקוצר (קבוצה 4)
-          r'(?:\s+פ"([א-ת]{1,3}|[0-9]{1,3}))?' +  // פסוק מקוצר אופציונלי (קבוצה 5)
+          r'פ"([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3})' +  // פרק מקוצר (קבוצה 4)
+          r'(?:\s+פ"([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3}))?' +  // פסוק מקוצר אופציונלי (קבוצה 5)
         r'|' +  // או
-          // פורמט פשוט עם פסיק או רווח
-          r'([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 6)
-          r'(?:(?:,\s*|\s+)([א-ת]{1,3}|[0-9]{1,3}))?' +  // פסוק אופציונלי (קבוצה 7)
+          // פורמט פשוט עם פסיק או רווח - כולל גרשיים
+          r'([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3})' +  // פרק (קבוצה 6)
+          r'(?:(?:,\s*|\s+)([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3}))?' +  // פסוק אופציונלי (קבוצה 7)
         r')' +
         r'(?=\s|\.|,|:|;|\)|\]|<|$)',  // סוף - רווח או סימן פיסוק או תג HTML
         unicode: true,
@@ -327,12 +377,16 @@ class AutoLinkProcessor {
         // מיפוי שמות חלופיים לשם הקובץ הנכון
         String actualBookName = _mapBookNameToFileName(bookName);
         
-        // בניית URL - תמיד נפתח לפרק (לא לפסוק ספציפי)
-        String url = 'book://$actualBookName#פרק $chapter';
+        // בניית URL עם fallback לכותרת
+        // לעת עתה נשתמש בפורמט עם fallback בלבד (מיפוי האינדקסים יתווסף בעתיד)
+        final fallbackRef = 'פרק $chapter';
+        
+        // קישור עם fallback (האינדקס המדויק יתווסף בעתיד)
+        final url = 'book://$actualBookName#$fallbackRef';
         
         // החזרת הטקסט המקורי עם קישור
         final linkText = fullMatch.trim();
-        return '<a href="$url" class="tanakh-ref">$linkText</a>';
+        return '<a href="$url" class="tanakh-ref" data-ref="$fallbackRef">$linkText</a>';
       });
       
       return result;
@@ -367,16 +421,16 @@ class AutoLinkProcessor {
         r'\s+' +  // רווח חובה
         r'(?:' +  // התחלת קבוצה לא לוכדת עבור כל הפורמטים
           // פורמט עם "פרק" ו"משנה" מפורש
-          r'פרק\s+([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 2)
-          r'(?:\s+משנה\s+([א-ת]{1,3}|[0-9]{1,3}))?' +  // משנה אופציונלית (קבוצה 3)
+          r'פרק\s+([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3})' +  // פרק (קבוצה 2)
+          r'(?:\s+משנה\s+([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3}))?' +  // משנה אופציונלית (קבוצה 3)
         r'|' +  // או
           // פורמט עם קיצורים פ"א מ"ב
-          r'פ"([א-ת]{1,3}|[0-9]{1,3})' +  // פרק מקוצר (קבוצה 4)
-          r'(?:\s+מ"([א-ת]{1,3}|[0-9]{1,3}))?' +  // משנה מקוצרת אופציונלית (קבוצה 5)
+          r'פ"([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3})' +  // פרק מקוצר (קבוצה 4)
+          r'(?:\s+מ"([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3}))?' +  // משנה מקוצרת אופציונלית (קבוצה 5)
         r'|' +  // או
-          // פורמט פשוט עם פסיק או רווח
-          r'([א-ת]{1,3}|[0-9]{1,3})' +  // פרק (קבוצה 6)
-          r'(?:(?:,\s*|\s+)([א-ת]{1,3}|[0-9]{1,3}))?' +  // משנה אופציונלית (קבוצה 7)
+          // פורמט פשוט עם פסיק או רווח - כולל גרשיים
+          r'([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3})' +  // פרק (קבוצה 6)
+          r'(?:(?:,\s*|\s+)([א-ת]{1,3}(?:["\u0027]\s*[א-ת])?|[0-9]{1,3}))?' +  // משנה אופציונלית (קבוצה 7)
         r')' +
         r'(?=\s|\.|,|:|;|\)|\]|<|$)',  // סוף - רווח או סימן פיסוק או תג HTML
         unicode: true,
@@ -454,12 +508,16 @@ class AutoLinkProcessor {
         // הוספת "משנה" לפני שם המסכת
         String actualTractate = 'משנה $tractate';
         
-        // בניית URL - תמיד נפתח לפרק (לא למשנה ספציפית)
-        String url = 'book://$actualTractate#פרק $chapter';
+        // בניית URL עם fallback לכותרת
+        // לעת עתה נשתמש בפורמט עם fallback בלבד (מיפוי האינדקסים יתווסף בעתיד)
+        final fallbackRef = 'פרק $chapter';
+        
+        // קישור עם fallback (האינדקס המדויק יתווסף בעתיד)
+        final url = 'book://$actualTractate#$fallbackRef';
         
         // החזרת הטקסט המקורי עם קישור
         final linkText = fullMatch.trim();
-        return '<a href="$url" class="mishna-ref">$linkText</a>';
+        return '<a href="$url" class="mishna-ref" data-ref="$fallbackRef">$linkText</a>';
       });
       
       return result;

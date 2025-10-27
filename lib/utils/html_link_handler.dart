@@ -8,6 +8,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
+import 'package:otzaria/utils/index_mapper.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 /// מחלקה לטיפול בקישורי HTML בתוך הטקסט
@@ -123,32 +124,49 @@ class HtmlLinkHandler {
   /// מטפל בלחיצה על קישור HTML
   /// 
   /// הפונקציה מפרשת קישורים בפורמטים הבאים:
-  /// - book://שם_הספר - פותח ספר בתחילת הספר
-  /// - book://שם_הספר#כותרת - פותח ספר ומנווט לכותרת ספציפית
-  /// - #כותרת - מנווט לכותרת באותו ספר
+  /// - book://שם_הספר@אינדקס - פותח ספר באינדקס ספציפי (מקצועי)
+  /// - book://שם_הספר@אינדקס#כותרת - פותח באינדקס עם fallback לכותרת
+  /// - book://שם_הספר#כותרת - פותח ספר ומנווט לכותרת (תאימות לאחור)
+  /// - #@אינדקס - מנווט לאינדקס באותו ספר (מקצועי)
+  /// - #כותרת - מנווט לכותרת באותו ספר (תאימות לאחור)
   /// - search://שאילתה - מבצע חיפוש
   /// 
-  /// דוגמאות:
-  /// - <a href="book://ברכות">ברכות</a>
+  /// דוגמאות חדשות (מקצועיות):
+  /// - <a href="book://ברכות@142">ברכות דף ב</a>
+  /// - <a href="book://בראשית@25#פרק א">בראשית א,א</a>
+  /// - <a href="#@87">דף ג</a>
+  /// 
+  /// דוגמאות ישנות (תאימות לאחור):
   /// - <a href="book://ברכות#דף ב">ברכות דף ב</a>
   /// - <a href="#דף ג">דף ג</a>
-  /// - <a href="search://הלכה">הלכה</a>
   static Future<bool> handleLink(
     BuildContext context,
     String url,
     Function(TextBookTab) openBookCallback,
   ) async {
     try {
-      // בדיקה אם זה קישור פנימי לכותרת באותו ספר
+      // בדיקה אם זה קישור פנימי
       if (url.startsWith('#')) {
-        final headerName = _safeDecode(url.substring(1));
-        await _navigateToHeader(context, headerName);
+        final target = _safeDecode(url.substring(1));
+        
+        // קישור מקצועי באינדקס: #@123
+        if (target.startsWith('@')) {
+          final indexStr = target.substring(1);
+          final index = int.tryParse(indexStr);
+          if (index != null) {
+            await _navigateToIndex(context, index);
+            return true;
+          }
+        }
+        
+        // קישור ישן לכותרת (תאימות לאחור): #דף ג
+        await _navigateToHeader(context, target);
         return true;
       }
 
       // בדיקה אם זה קישור חיפוש
       if (url.startsWith('search://')) {
-        final searchQuery = _safeDecode(url.substring(9)); // הסרת "search://"
+        final searchQuery = _safeDecode(url.substring(9));
         await _performSearch(context, searchQuery);
         return true;
       }
@@ -158,28 +176,40 @@ class HtmlLinkHandler {
         final bookUrl = url.substring(7); // הסרת "book://"
         
         String bookTitle;
-        String? headerName;
+        int? targetIndex;
+        String? fallbackHeader;
         
-        // בדיקה אם יש כותרת ספציפית
+        // פיצול לחלקים: ספר@אינדקס#כותרת או ספר#כותרת או ספר@אינדקס
+        String mainPart = bookUrl;
+        String? fragmentPart;
+        
         if (bookUrl.contains('#')) {
           final parts = bookUrl.split('#');
-          bookTitle = _safeDecode(parts[0]);
-          
-          // טיפול במבנה תלמודי: ספר#דף#צד
-          if (parts.length >= 2) {
-            if (parts.length == 3) {
-              // מבנה מלא: ספר#דף#צד
-              headerName = _safeDecode('${parts[1]} ${parts[2]}');
-            } else {
-              // מבנה רגיל: ספר#כותרת
-              headerName = _safeDecode(parts[1]);
-            }
-          }
-        } else {
-          bookTitle = _safeDecode(bookUrl);
+          mainPart = parts[0];
+          fragmentPart = parts.length > 1 ? parts[1] : null;
         }
         
-        await _openBookWithHeader(context, bookTitle, headerName, openBookCallback);
+        // בדיקה אם יש אינדקס מקצועי: ספר@123
+        if (mainPart.contains('@')) {
+          final parts = mainPart.split('@');
+          bookTitle = _safeDecode(parts[0]);
+          if (parts.length > 1) {
+            targetIndex = int.tryParse(parts[1]);
+          }
+          
+          // אם יש גם fragment, זה fallback header
+          if (fragmentPart != null) {
+            fallbackHeader = _safeDecode(fragmentPart);
+          }
+        } else {
+          // פורמט ישן: ספר#כותרת (תאימות לאחור)
+          bookTitle = _safeDecode(mainPart);
+          if (fragmentPart != null) {
+            fallbackHeader = _safeDecode(fragmentPart);
+          }
+        }
+        
+        await _openBookWithIndexOrHeader(context, bookTitle, targetIndex, fallbackHeader, openBookCallback);
         return true;
       }
 
@@ -203,10 +233,9 @@ class HtmlLinkHandler {
     }
   }
 
-  /// מנווט לכותרת באותו ספר הנוכחי
-  static Future<void> _navigateToHeader(BuildContext context, String headerName) async {
+  /// מנווט לאינדקס ספציפי באותו ספר הנוכחי (מקצועי)
+  static Future<void> _navigateToIndex(BuildContext context, int targetIndex) async {
     try {
-      // נקבל את הספר הנוכחי מה-BLoC
       final textBookBloc = context.read<TextBookBloc>();
       final state = textBookBloc.state;
       
@@ -214,11 +243,51 @@ class HtmlLinkHandler {
         throw Exception('לא ניתן לנווט - הספר לא נטען');
       }
 
-      // חיפוש הכותרת בתוכן הספציפי
+      // ניווט מיידי לאינדקס
+      state.scrollController.scrollTo(
+        index: targetIndex,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.ease,
+      );
+      
+      if (context.mounted) {
+        // קבלת שם הכותרת לתצוגה באמצעות IndexMapper
+        final headerName = await IndexMapper.instance.getRefFromIndex(state.book.title, targetIndex);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('נווט לאינדקס $targetIndex: ${headerName ?? 'לא ידוע'}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('שגיאה בניווט לאינדקס: $e');
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('לא ניתן לנווט לאינדקס: $targetIndex'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  /// מנווט לכותרת באותו ספר הנוכחי (תאימות לאחור)
+  static Future<void> _navigateToHeader(BuildContext context, String headerName) async {
+    try {
+      final textBookBloc = context.read<TextBookBloc>();
+      final state = textBookBloc.state;
+      
+      if (state is! TextBookLoaded) {
+        throw Exception('לא ניתן לנווט - הספר לא נטען');
+      }
+
+      // חיפוש הכותרת בתוכן הספציפי (רק לתאימות לאחור)
       final index = await _findHeaderIndex(state.book, headerName);
       
       if (index != null) {
-        // ניווט לאינדקס שנמצא
         state.scrollController.scrollTo(
           index: index,
           duration: const Duration(milliseconds: 250),
@@ -250,11 +319,12 @@ class HtmlLinkHandler {
     }
   }
 
-  /// פותח ספר ומנווט לכותרת ספציפית (אם צוינה)
-  static Future<void> _openBookWithHeader(
+  /// פותח ספר ומנווט לאינדקס או כותרת ספציפית
+  static Future<void> _openBookWithIndexOrHeader(
     BuildContext context,
     String bookTitle,
-    String? headerName,
+    int? targetIndex,
+    String? fallbackHeader,
     Function(TextBookTab) openBookCallback,
   ) async {
     try {
@@ -287,17 +357,41 @@ class HtmlLinkHandler {
       final book = foundBook as TextBook;
       int startIndex = 0;
       
-      // אם צוינה כותרת, נחפש את האינדקס שלה
-      if (headerName != null && headerName.isNotEmpty) {
-        final headerIndex = await _findHeaderIndex(book, headerName);
+      // אם יש אינדקס מקצועי, נשתמש בו (עדיפות ראשונה)
+      if (targetIndex != null) {
+        startIndex = targetIndex;
+        
+        if (context.mounted) {
+          // קבלת שם הכותרת לתצוגה באמצעות IndexMapper
+          final headerName = await IndexMapper.instance.getRefFromIndex(bookTitle, targetIndex);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('פותח ספר: $bookTitle באינדקס $targetIndex${headerName != null ? ' - $headerName' : ''}'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+      // אם אין אינדקס אבל יש כותרת fallback, נחפש אותה (תאימות לאחור)
+      else if (fallbackHeader != null && fallbackHeader.isNotEmpty) {
+        final headerIndex = await _findHeaderIndex(book, fallbackHeader);
         if (headerIndex != null) {
           startIndex = headerIndex;
+          
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('פותח ספר: $bookTitle - $fallbackHeader'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
         } else {
           // אם לא נמצאה הכותרת, נציג אזהרה אבל עדיין נפתח את הספר
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('לא נמצאה הכותרת "$headerName" בספר $bookTitle, פותח את תחילת הספר'),
+                content: Text('לא נמצאה הכותרת "$fallbackHeader" בספר $bookTitle, פותח את תחילת הספר'),
                 duration: const Duration(seconds: 3),
               ),
             );
@@ -314,15 +408,6 @@ class HtmlLinkHandler {
       );
       
       openBookCallback(tab);
-      
-      if (context.mounted && headerName != null && headerName.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('פתח ספר: $bookTitle${headerName != null ? ' - $headerName' : ''}'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
     } catch (e) {
       debugPrint('שגיאה בפתיחת ספר: $e');
       
