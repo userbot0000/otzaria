@@ -80,11 +80,10 @@ jobs:
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "ISCC resolved to: $iscc"
 
-      - name: Build Flutter Windows app
+      - name: Build Flutter Windows app (Debug - Fast)
         shell: pwsh
         run: |
-          # flutter pub get
-          flutter build windows --release
+          flutter build windows --debug
 
       - name: Zip Windows build
         shell: pwsh
