@@ -88,17 +88,35 @@ jobs:
       - name: Zip Windows build
         shell: pwsh
         run: |
-          $relDir = Get-ChildItem -Directory build\windows |
-                    Where-Object { Test-Path "$($_.FullName)\runner\Release" } |
-                    Select-Object -First 1 -ExpandProperty FullName
-          if (-not $relDir) { throw 'Release directory not found' }
-          Compress-Archive -Path "$relDir\runner\Release\*" -DestinationPath otzaria-windows.zip
-
+          # מצא את תיקיית הבנייה (Debug או Release)
+          $debugDir = Get-ChildItem -Directory build\windows |
+                      Where-Object { Test-Path "$($_.FullName)\runner\Debug" } |
+                      Select-Object -First 1 -ExpandProperty FullName
+          
+          $releaseDir = Get-ChildItem -Directory build\windows |
+                        Where-Object { Test-Path "$($_.FullName)\runner\Release" } |
+                        Select-Object -First 1 -ExpandProperty FullName
+          
+          if ($releaseDir) {
+            Write-Host "Found Release build, using Release directory"
+            $buildDir = $releaseDir
+            $buildType = "Release"
+          } elseif ($debugDir) {
+            Write-Host "Found Debug build, using Debug directory"
+            $buildDir = $debugDir
+            $buildType = "Debug"
+          } else {
+            throw 'Neither Release nor Debug directory found'
+          }
+          
+          Compress-Archive -Path "$buildDir\runner\$buildType\*" -DestinationPath otzaria-windows.zip
+          Write-Host "Created otzaria-windows.zip from $buildType build"
+      
       - name: Build MSIX package
         shell: pwsh
         run: |
           dart run msix:create --install-certificate false
-
+      
       - name: Download library for full installer (main branch only)
         if: github.ref == 'refs/heads/main'
         shell: pwsh
@@ -110,7 +128,7 @@ jobs:
           Write-Host "Library downloaded and extracted successfully to otzaria-library/"
           Write-Host "Library contents:"
           Get-ChildItem -Path "otzaria-library" -Recurse | Select-Object -First 10
-
+      
       - name: Build Inno Setup installer
         shell: pwsh
         run: |
@@ -121,24 +139,26 @@ jobs:
             Write-Host "Building regular installer for non-main branch..."
             & "$env:ISCC" installer\otzaria.iss
           }
-
+      
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
           name: otzaria-windows-installer
           path: installer/otzaria-*-windows.exe
-
+      
       - name: Upload Windows ZIP
         uses: actions/upload-artifact@v4
         with:
           name: otzaria-windows-zip
           path: otzaria-windows.zip
-
+      
       - name: Upload Windows MSIX
         uses: actions/upload-artifact@v4
         with:
           name: otzaria.msix
-          path: build/windows/x64/runner/release/*.msix
+          path: |
+            build/windows/x64/runner/release/*.msix
+            build/windows/x64/runner/debug/*.msix
 
   build_linux:
     if: github.event_name != 'release'
