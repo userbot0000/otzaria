@@ -253,20 +253,7 @@ class _MySettingsScreenState extends State<MySettingsScreen>
                       leading: const Icon(Icons.menu_book),
                       onTap: () => showReadingSettingsDialog(context),
                     ),
-                    SwitchSettingsTile(
-                      settingKey: 'key-enable-auto-links',
-                      title: 'קישורים אוטומטיים',
-                      enabledLabel: 'מילים במילון יוצגו כקישורים לספרים',
-                      disabledLabel: 'מילים במילון יוצגו כטקסט רגיל',
-                      leading: const Icon(Icons.link),
-                      defaultValue: state.enableAutoLinks,
-                      onChange: (value) {
-                        context
-                            .read<SettingsBloc>()
-                            .add(UpdateEnableAutoLinks(value));
-                      },
-                      activeColor: Theme.of(context).cardColor,
-                    ),
+                    _buildLinksSettingsTile(context, state),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -502,6 +489,84 @@ class _MySettingsScreenState extends State<MySettingsScreen>
         },
       ),
     );
+  }
+
+  /// בונה את הגדרות הקישורים עם שלוש אפשרויות
+  Widget _buildLinksSettingsTile(BuildContext context, SettingsState state) {
+    // קביעת המצב הנוכחי
+    String currentMode;
+    if (!state.enableAutoLinks) {
+      currentMode = 'disabled';
+    } else if (state.fileLinksOnly) {
+      currentMode = 'file_only';
+    } else {
+      currentMode = 'all';
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ExpansionTile(
+        leading: const Icon(Icons.link),
+        title: const Text('הגדרות קישורים'),
+        subtitle: Text(_getLinksModeDescription(currentMode)),
+        children: [
+          RadioListTile<String>(
+            title: const Text('השבתת כל הקישורים'),
+            subtitle: const Text('לא יוצגו קישורים כלל'),
+            value: 'disabled',
+            groupValue: currentMode,
+            onChanged: (value) {
+              if (value == 'disabled') {
+                context.read<SettingsBloc>().add(const UpdateEnableAutoLinks(false));
+                context.read<SettingsBloc>().add(const UpdateFileLinksOnly(false));
+              }
+            },
+          ),
+          RadioListTile<String>(
+            title: const Text('קישורים מהקובץ בלבד'),
+            subtitle: const Text('רק קישורים שנכתבו במפורש בטקסט'),
+            value: 'file_only',
+            groupValue: currentMode,
+            onChanged: (value) {
+              if (value == 'file_only') {
+                context.read<SettingsBloc>().add(const UpdateEnableAutoLinks(true));
+                context.read<SettingsBloc>().add(const UpdateFileLinksOnly(true));
+              }
+            },
+          ),
+          RadioListTile<String>(
+            title: const Text('הפעלת כל הקישורים'),
+            subtitle: const Text('קישורים מהקובץ + קישורים אוטומטיים'),
+            value: 'all',
+            groupValue: currentMode,
+            onChanged: (value) {
+              if (value == 'all') {
+                context.read<SettingsBloc>().add(const UpdateEnableAutoLinks(true));
+                context.read<SettingsBloc>().add(const UpdateFileLinksOnly(false));
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// מחזיר תיאור למצב הקישורים הנוכחי
+  String _getLinksModeDescription(String mode) {
+    switch (mode) {
+      case 'disabled':
+        return 'כל הקישורים מושבתים';
+      case 'file_only':
+        return 'רק קישורים מהקובץ';
+      case 'all':
+        return 'כל הקישורים פעילים';
+      default:
+        return 'לא ידוע';
+    }
   }
 }
 

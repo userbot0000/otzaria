@@ -23,6 +23,7 @@ class SettingsState extends Equatable {
   final String copyWithHeaders;
   final String copyHeaderFormat;
   final bool enableAutoLinks;
+  final bool fileLinksOnly;
 
   const SettingsState({
     required this.isDarkMode,
@@ -46,6 +47,7 @@ class SettingsState extends Equatable {
     required this.copyWithHeaders,
     required this.copyHeaderFormat,
     required this.enableAutoLinks,
+    required this.fileLinksOnly,
   });
 
   factory SettingsState.initial() {
@@ -71,6 +73,7 @@ class SettingsState extends Equatable {
       copyWithHeaders: 'none',
       copyHeaderFormat: 'same_line_after_brackets',
       enableAutoLinks: true,
+      fileLinksOnly: false,
     );
   }
 
@@ -96,6 +99,7 @@ class SettingsState extends Equatable {
     String? copyWithHeaders,
     String? copyHeaderFormat,
     bool? enableAutoLinks,
+    bool? fileLinksOnly,
   }) {
     return SettingsState(
       isDarkMode: isDarkMode ?? this.isDarkMode,
@@ -120,6 +124,7 @@ class SettingsState extends Equatable {
       copyWithHeaders: copyWithHeaders ?? this.copyWithHeaders,
       copyHeaderFormat: copyHeaderFormat ?? this.copyHeaderFormat,
       enableAutoLinks: enableAutoLinks ?? this.enableAutoLinks,
+      fileLinksOnly: fileLinksOnly ?? this.fileLinksOnly,
     );
   }
 
@@ -146,5 +151,6 @@ class SettingsState extends Equatable {
         copyWithHeaders,
         copyHeaderFormat,
         enableAutoLinks,
+        fileLinksOnly,
       ];
 }

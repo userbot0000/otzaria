@@ -68,6 +68,8 @@ dependencies:
   scrollable_positioned_list: ^0.3.8
   search_highlight_text: ^1.0.0+2
   fuzzywuzzy: ^1.1.6
+  flutter_svg: ^2.0.10+1
+  font_awesome_flutter: ^10.6.0
   file_picker: ^10.2.1
   permission_handler: ^11.3.0
   flutter_launcher_icons: "^0.13.1"
@@ -163,6 +165,7 @@ flutter:
   assets:
     - assets/
     - assets/logos/
+    - assets/icons/
     - assets/ca/
     - assets/icon/שמור וזכור.png
     - assets/icon/shamor_zachor_with_v.png

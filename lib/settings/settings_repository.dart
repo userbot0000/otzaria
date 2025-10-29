@@ -27,6 +27,7 @@ class SettingsRepository {
   static const String keyCopyWithHeaders = 'key-copy-with-headers';
   static const String keyCopyHeaderFormat = 'key-copy-header-format';
   static const String keyEnableAutoLinks = 'key-enable-auto-links';
+  static const String keyFileLinksOnly = 'key-file-links-only';
 
   final SettingsWrapper _settings;
 
@@ -120,6 +121,10 @@ class SettingsRepository {
       'enableAutoLinks': _settings.getValue<bool>(
         keyEnableAutoLinks,
         defaultValue: true,
+      ),
+      'fileLinksOnly': _settings.getValue<bool>(
+        keyFileLinksOnly,
+        defaultValue: false,
       ),
     };
   }
@@ -220,6 +225,10 @@ class SettingsRepository {
     await _settings.setValue(keyEnableAutoLinks, value);
   }
 
+  Future<void> updateFileLinksOnly(bool value) async {
+    await _settings.setValue(keyFileLinksOnly, value);
+  }
+
   /// Initialize default settings to disk if this is the first app launch
   Future<void> _initializeDefaultsIfNeeded() async {
     if (await _checkIfDefaultsNeeded()) {
@@ -260,6 +269,7 @@ class SettingsRepository {
     await _settings.setValue(keyCopyWithHeaders, 'none');
     await _settings.setValue(keyCopyHeaderFormat, 'same_line_after_brackets');
     await _settings.setValue(keyEnableAutoLinks, true);
+    await _settings.setValue(keyFileLinksOnly, false);
 
     // Mark as initialized
     await _settings.setValue('settings_initialized', true);

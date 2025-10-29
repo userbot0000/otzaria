@@ -664,6 +664,7 @@ $textWithBreaks
                 processedData = AutoLinkProcessor.instance.processText(
                   processedData,
                   enableAutoLinks: settingsState.enableAutoLinks,
+                  fileLinksOnly: settingsState.fileLinksOnly,
                   excludeExistingLinks: true,
                 );
                 return processedData;
@@ -675,9 +676,9 @@ $textWithBreaks
                 fontFamily: settingsState.fontFamily,
                 height: 1.5,
               ),
-              onTapUrl: (url) async {
+              onTapUrl: settingsState.enableAutoLinks ? (url) async {
                 return await HtmlLinkHandler.handleLink(context, url, widget.openBookCallback);
-              },
+              } : null,
             );
           },
         ),

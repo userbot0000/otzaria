@@ -13,11 +13,11 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 /// מחלקה לטיפול בקישורי HTML בתוך הטקסט
 class HtmlLinkHandler {
   static OverlayEntry? _currentOverlay;
-  static final ItemScrollController _previewScrollController = ItemScrollController();
+
   /// מנסה לפענח URL בצורה בטוחה, תומך בטקסט רגיל ו-URL encoded
   static String _safeDecode(String text) {
     if (text.isEmpty) return text;
-    
+
     try {
       // אם הטקסט מכיל % זה כנראה מקודד
       if (text.contains('%')) {
@@ -52,7 +52,7 @@ class HtmlLinkHandler {
         final textBookBloc = context.read<TextBookBloc>();
         final state = textBookBloc.state;
         if (state is! TextBookLoaded) return;
-        
+
         bookTitle = state.book.title;
         headerName = _safeDecode(url.substring(1));
       } else if (url.startsWith('book://')) {
@@ -60,7 +60,7 @@ class HtmlLinkHandler {
         if (bookUrl.contains('#')) {
           final parts = bookUrl.split('#');
           bookTitle = _safeDecode(parts[0]);
-          
+
           // טיפול במבנה תלמודי: ספר#דף#צד
           if (parts.length >= 2) {
             if (parts.length == 3) {
@@ -78,14 +78,12 @@ class HtmlLinkHandler {
         return; // לא קישור שאנחנו מטפלים בו
       }
 
-      if (bookTitle == null) return;
-
       // טעינת הספר
       final library = await DataRepository.instance.library;
-      final foundBook = await library.findBookByTitle(bookTitle, TextBook);
+      final foundBook = library.findBookByTitle(bookTitle, TextBook);
       if (foundBook == null || foundBook is! TextBook) return;
 
-      final book = foundBook as TextBook;
+      final book = foundBook;
       final content = await book.text;
       final lines = content.split('\n');
 
@@ -108,7 +106,9 @@ class HtmlLinkHandler {
         ),
       );
 
-      Overlay.of(context).insert(_currentOverlay!);
+      if (context.mounted) {
+        Overlay.of(context).insert(_currentOverlay!);
+      }
     } catch (e) {
       debugPrint('שגיאה בהצגת תצוגה מקדימה: $e');
     }
@@ -121,13 +121,13 @@ class HtmlLinkHandler {
   }
 
   /// מטפל בלחיצה על קישור HTML
-  /// 
+  ///
   /// הפונקציה מפרשת קישורים בפורמטים הבאים:
   /// - book://שם_הספר - פותח ספר בתחילת הספר
   /// - book://שם_הספר#כותרת - פותח ספר ומנווט לכותרת ספציפית
   /// - #כותרת - מנווט לכותרת באותו ספר
   /// - search://שאילתה - מבצע חיפוש
-  /// 
+  ///
   /// דוגמאות:
   /// - <a href="book://ברכות">ברכות</a>
   /// - <a href="book://ברכות#דף ב">ברכות דף ב</a>
@@ -156,15 +156,15 @@ class HtmlLinkHandler {
       // בדיקה אם זה קישור לספר
       if (url.startsWith('book://')) {
         final bookUrl = url.substring(7); // הסרת "book://"
-        
+
         String bookTitle;
         String? headerName;
-        
+
         // בדיקה אם יש כותרת ספציפית
         if (bookUrl.contains('#')) {
           final parts = bookUrl.split('#');
           bookTitle = _safeDecode(parts[0]);
-          
+
           // טיפול במבנה תלמודי: ספר#דף#צד
           if (parts.length >= 2) {
             if (parts.length == 3) {
@@ -178,8 +178,9 @@ class HtmlLinkHandler {
         } else {
           bookTitle = _safeDecode(bookUrl);
         }
-        
-        await _openBookWithHeader(context, bookTitle, headerName, openBookCallback);
+
+        await _openBookWithHeader(
+            context, bookTitle, headerName, openBookCallback);
         return true;
       }
 
@@ -188,7 +189,7 @@ class HtmlLinkHandler {
     } catch (e, stackTrace) {
       debugPrint('שגיאה בטיפול בקישור: $e');
       debugPrint('Stack trace: $stackTrace');
-      
+
       // הצגת הודעת שגיאה למשתמש
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -198,25 +199,26 @@ class HtmlLinkHandler {
           ),
         );
       }
-      
+
       return false;
     }
   }
 
   /// מנווט לכותרת באותו ספר הנוכחי
-  static Future<void> _navigateToHeader(BuildContext context, String headerName) async {
+  static Future<void> _navigateToHeader(
+      BuildContext context, String headerName) async {
     try {
       // נקבל את הספר הנוכחי מה-BLoC
       final textBookBloc = context.read<TextBookBloc>();
       final state = textBookBloc.state;
-      
+
       if (state is! TextBookLoaded) {
         throw Exception('לא ניתן לנווט - הספר לא נטען');
       }
 
       // חיפוש הכותרת בתוכן הספציפי
       final index = await _findHeaderIndex(state.book, headerName);
-      
+
       if (index != null) {
         // ניווט לאינדקס שנמצא
         state.scrollController.scrollTo(
@@ -224,7 +226,7 @@ class HtmlLinkHandler {
           duration: const Duration(milliseconds: 250),
           curve: Curves.ease,
         );
-        
+
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -238,7 +240,7 @@ class HtmlLinkHandler {
       }
     } catch (e) {
       debugPrint('שגיאה בניווט לכותרת: $e');
-      
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -260,23 +262,25 @@ class HtmlLinkHandler {
     try {
       // חיפוש הספר בספרייה
       final library = await DataRepository.instance.library;
-      
+
       // קבלת רשימת כל הספרים לבדיקה
-      final allBooks = await library.getAllBooks();
-      
-      final foundBook = await library.findBookByTitle(bookTitle, TextBook);
-      
+      final allBooks = library.getAllBooks();
+
+      final foundBook = library.findBookByTitle(bookTitle, TextBook);
+
       if (foundBook == null) {
         // נסה לחפש בלי להגביל לטיפוס TextBook
-        final anyBook = await library.findBookByTitle(bookTitle, null);
-        
+        final anyBook = library.findBookByTitle(bookTitle, null);
+
         if (anyBook != null) {
-          throw Exception('הספר "$bookTitle" נמצא אבל הוא מטיפוס ${anyBook.runtimeType}, לא TextBook');
+          throw Exception(
+              'הספר "$bookTitle" נמצא אבל הוא מטיפוס ${anyBook.runtimeType}, לא TextBook');
         }
-        
+
         // הצגת רשימת ספרים זמינים למשתמש
         final availableBooks = allBooks.take(10).map((b) => b.title).join(', ');
-        throw Exception('לא נמצא ספר בשם: "$bookTitle".\nספרים זמינים (דוגמאות): $availableBooks');
+        throw Exception(
+            'לא נמצא ספר בשם: "$bookTitle".\nספרים זמינים (דוגמאות): $availableBooks');
       }
 
       // וידוא שזה TextBook
@@ -284,9 +288,9 @@ class HtmlLinkHandler {
         throw Exception('הספר $bookTitle אינו ספר טקסט');
       }
 
-      final book = foundBook as TextBook;
+      final book = foundBook;
       int startIndex = 0;
-      
+
       // אם צוינה כותרת, נחפש את האינדקס שלה
       if (headerName != null && headerName.isNotEmpty) {
         final headerIndex = await _findHeaderIndex(book, headerName);
@@ -297,7 +301,8 @@ class HtmlLinkHandler {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('לא נמצאה הכותרת "$headerName" בספר $bookTitle, פותח את תחילת הספר'),
+                content: Text(
+                    'לא נמצאה הכותרת "$headerName" בספר $bookTitle, פותח את תחילת הספר'),
                 duration: const Duration(seconds: 3),
               ),
             );
@@ -312,20 +317,20 @@ class HtmlLinkHandler {
         openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
             (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
       );
-      
+
       openBookCallback(tab);
-      
+
       if (context.mounted && headerName != null && headerName.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('פתח ספר: $bookTitle${headerName != null ? ' - $headerName' : ''}'),
+            content: Text('פתח ספר: $bookTitle - $headerName'),
             duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
       debugPrint('שגיאה בפתיחת ספר: $e');
-      
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -342,14 +347,14 @@ class HtmlLinkHandler {
     try {
       // קבלת תוכן הספציפי
       final tableOfContents = await book.tableOfContents;
-      
+
       // חיפוש בתוכן העניינים - קודם חיפוש מדויק
       for (final entry in tableOfContents) {
         if (isHeaderMatch(entry.text, headerName)) {
           return entry.index;
         }
       }
-      
+
       // אם לא נמצא, ננסה לחפש רק לפי מספר הדף (בלי עמוד)
       // זה עוזר כשהקישור כולל עמוד שלא קיים בתוכן העניינים
       final pageOnlyMatch = _extractPageNumber(headerName);
@@ -365,24 +370,24 @@ class HtmlLinkHandler {
       // אם לא נמצא בתוכן העניינים, נחפש בתוכן הספר עצמו
       final content = await book.text;
       final lines = content.split('\n');
-      
+
       // חיפוש מדויק
       for (int i = 0; i < lines.length; i++) {
         final line = lines[i];
         final cleanLine = line.replaceAll(RegExp(r'<[^>]*>'), '').trim();
-        
+
         if (isHeaderMatch(cleanLine, headerName)) {
           return i;
         }
       }
-      
+
       // חיפוש לפי דף בלבד
       if (pageOnlyMatch != null) {
         for (int i = 0; i < lines.length; i++) {
           final line = lines[i];
           final cleanLine = line.replaceAll(RegExp(r'<[^>]*>'), '').trim();
           final linePageMatch = _extractPageNumber(cleanLine);
-          
+
           if (linePageMatch != null && linePageMatch == pageOnlyMatch) {
             return i;
           }
@@ -395,7 +400,7 @@ class HtmlLinkHandler {
       return null;
     }
   }
-  
+
   /// מחלץ את מספר הדף מכותרת (למשל "דף כג א" -> "כג")
   static String? _extractPageNumber(String text) {
     // דפוס לזיהוי מספר דף עברי
@@ -404,14 +409,14 @@ class HtmlLinkHandler {
     if (match != null) {
       return match.group(1);
     }
-    
+
     // אם אין "דף", ננסה למצוא מספר עברי בתחילת המחרוזת
     final numberPattern = RegExp(r'^([א-ת]{1,3})(?:\s|$)');
     final numberMatch = numberPattern.firstMatch(text.trim());
     if (numberMatch != null) {
       return numberMatch.group(1);
     }
-    
+
     return null;
   }
 
@@ -437,7 +442,7 @@ class HtmlLinkHandler {
       }
     } catch (e) {
       debugPrint('שגיאה בחיפוש: $e');
-      
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -454,27 +459,27 @@ class HtmlLinkHandler {
     // ניקוי הטקסטים לצורך השוואה
     final cleanText = text.trim().replaceAll(RegExp(r'\s+'), ' ');
     final cleanHeader = headerName.trim().replaceAll(RegExp(r'\s+'), ' ');
-    
+
     // השוואה מדויקת
     if (cleanText == cleanHeader) {
       return true;
     }
-    
+
     // השוואה ללא רגישות לרווחים
     if (cleanText.replaceAll(' ', '') == cleanHeader.replaceAll(' ', '')) {
       return true;
     }
-    
+
     // בדיקה אם הכותרת מכילה את הטקסט המבוקש
     if (cleanText.contains(cleanHeader)) {
       return true;
     }
-    
+
     // בדיקה הפוכה - אם הטקסט המבוקש מכיל את הכותרת
     if (cleanHeader.contains(cleanText)) {
       return true;
     }
-    
+
     return false;
   }
 }
@@ -558,7 +563,10 @@ class _PreviewOverlayState extends State<_PreviewOverlay> {
                 color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outline
+                      .withValues(alpha: 0.2),
                 ),
               ),
               child: Column(
@@ -567,7 +575,8 @@ class _PreviewOverlayState extends State<_PreviewOverlay> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      color:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(12),
                         topRight: Radius.circular(12),
@@ -578,9 +587,12 @@ class _PreviewOverlayState extends State<_PreviewOverlay> {
                         Expanded(
                           child: Text(
                             widget.bookTitle,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -612,10 +624,16 @@ class _PreviewOverlayState extends State<_PreviewOverlay> {
                           padding: const EdgeInsets.all(8),
                           decoration: isHighlighted
                               ? BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primary
+                                      .withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary
+                                        .withValues(alpha: 0.3),
                                   ),
                                 )
                               : null,
@@ -628,7 +646,7 @@ class _PreviewOverlayState extends State<_PreviewOverlay> {
                             textStyle: TextStyle(
                               fontSize: 14,
                               height: 1.5,
-                              color: isHighlighted 
+                              color: isHighlighted
                                   ? Theme.of(context).colorScheme.primary
                                   : null,
                             ),

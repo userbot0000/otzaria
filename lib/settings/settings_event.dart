@@ -198,3 +198,12 @@ class UpdateEnableAutoLinks extends SettingsEvent {
   @override
   List<Object?> get props => [enableAutoLinks];
 }
+
+class UpdateFileLinksOnly extends SettingsEvent {
+  final bool fileLinksOnly;
+
+  const UpdateFileLinksOnly(this.fileLinksOnly);
+
+  @override
+  List<Object?> get props => [fileLinksOnly];
+}

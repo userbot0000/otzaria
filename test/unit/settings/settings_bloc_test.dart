@@ -47,6 +47,8 @@ void main() {
         'facetFilteringWidth': 235.0,
         'copyWithHeaders': 'none',
         'copyHeaderFormat': 'same_line_after_brackets',
+        'enableAutoLinks': true,
+        'fileLinksOnly': false,
       };
 
       blocTest<SettingsBloc, SettingsState>(
@@ -80,6 +82,8 @@ void main() {
             facetFilteringWidth: mockSettings['facetFilteringWidth'] as double,
             copyWithHeaders: mockSettings['copyWithHeaders'] as String,
             copyHeaderFormat: mockSettings['copyHeaderFormat'] as String,
+            enableAutoLinks: mockSettings['enableAutoLinks'] as bool,
+            fileLinksOnly: mockSettings['fileLinksOnly'] as bool,
           ),
         ],
         verify: (_) {
