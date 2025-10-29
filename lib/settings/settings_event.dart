@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
+import 'package:otzaria/settings/settings_state.dart';
 
 abstract class SettingsEvent extends Equatable {
   const SettingsEvent();
@@ -206,4 +207,13 @@ class UpdateFileLinksOnly extends SettingsEvent {
 
   @override
   List<Object?> get props => [fileLinksOnly];
+}
+
+class UpdateLibraryViewMode extends SettingsEvent {
+  final LibraryViewMode libraryViewMode;
+
+  const UpdateLibraryViewMode(this.libraryViewMode);
+
+  @override
+  List<Object?> get props => [libraryViewMode];
 }

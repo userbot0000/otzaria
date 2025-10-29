@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:equatable/equatable.dart';
 
+enum LibraryViewMode { grid, list }
+
 class SettingsState extends Equatable {
   final bool isDarkMode;
   final Color seedColor;
@@ -24,6 +26,7 @@ class SettingsState extends Equatable {
   final String copyHeaderFormat;
   final bool enableAutoLinks;
   final bool fileLinksOnly;
+  final LibraryViewMode libraryViewMode;
 
   const SettingsState({
     required this.isDarkMode,
@@ -48,6 +51,7 @@ class SettingsState extends Equatable {
     required this.copyHeaderFormat,
     required this.enableAutoLinks,
     required this.fileLinksOnly,
+    required this.libraryViewMode,
   });
 
   factory SettingsState.initial() {
@@ -74,6 +78,7 @@ class SettingsState extends Equatable {
       copyHeaderFormat: 'same_line_after_brackets',
       enableAutoLinks: true,
       fileLinksOnly: false,
+      libraryViewMode: LibraryViewMode.grid,
     );
   }
 
@@ -100,6 +105,7 @@ class SettingsState extends Equatable {
     String? copyHeaderFormat,
     bool? enableAutoLinks,
     bool? fileLinksOnly,
+    LibraryViewMode? libraryViewMode,
   }) {
     return SettingsState(
       isDarkMode: isDarkMode ?? this.isDarkMode,
@@ -125,6 +131,7 @@ class SettingsState extends Equatable {
       copyHeaderFormat: copyHeaderFormat ?? this.copyHeaderFormat,
       enableAutoLinks: enableAutoLinks ?? this.enableAutoLinks,
       fileLinksOnly: fileLinksOnly ?? this.fileLinksOnly,
+      libraryViewMode: libraryViewMode ?? this.libraryViewMode,
     );
   }
 
@@ -152,5 +159,6 @@ class SettingsState extends Equatable {
         copyHeaderFormat,
         enableAutoLinks,
         fileLinksOnly,
+        libraryViewMode,
       ];
 }

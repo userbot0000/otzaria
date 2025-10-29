@@ -18,6 +18,7 @@ import 'package:otzaria/file_sync/file_sync_widget.dart';
 import 'package:otzaria/widgets/filter_list/src/filter_list_dialog.dart';
 import 'package:otzaria/widgets/filter_list/src/theme/filter_list_theme.dart';
 import 'package:otzaria/library/view/grid_items.dart';
+import 'package:otzaria/library/view/list_view.dart';
 import 'package:otzaria/library/view/otzar_book_dialog.dart';
 import 'package:otzaria/workspaces/view/workspace_switcher_dialog.dart';
 import 'package:otzaria/history/history_dialog.dart';
@@ -42,6 +43,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   bool get wantKeepAlive => true;
 
   int _depth = 0;
+  Book? _selectedBook;
   @override
   void initState() {
     super.initState();
@@ -167,6 +169,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   },
                 ),
               ),
+              _buildViewModeButton(context, settingsState),
               _buildSettingsButton(context, settingsState, state),
             ],
           );
@@ -175,9 +178,38 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     );
   }
 
+  Widget _buildViewModeButton(BuildContext context, SettingsState settingsState) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: IconButton(
+        icon: Icon(
+          settingsState.libraryViewMode == LibraryViewMode.grid
+              ? Icons.view_list
+              : Icons.grid_view,
+        ),
+        tooltip: settingsState.libraryViewMode == LibraryViewMode.grid
+            ? 'החלף לתצוגת רשימה'
+            : 'החלף לתצוגת רשת',
+        onPressed: () {
+          final newMode = settingsState.libraryViewMode == LibraryViewMode.grid
+              ? LibraryViewMode.list
+              : LibraryViewMode.grid;
+          context.read<SettingsBloc>().add(UpdateLibraryViewMode(newMode));
+        },
+        style: IconButton.styleFrom(
+          foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSettingsButton(BuildContext context, SettingsState settingsState, LibraryState state) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
       child: IconButton(
         icon: const Icon(Icons.settings_outlined),
         tooltip: 'הגדרות',
@@ -261,85 +293,184 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   Widget _buildContent(LibraryState state) {
-    final items = state.searchResults != null
-        ? _buildSearchResults(state.searchResults!)
-        : _buildCategoryContent(state.currentCategory!);
+    return BlocBuilder<SettingsBloc, SettingsState>(
+      builder: (context, settingsState) {
+        final items = state.searchResults != null
+            ? _buildSearchResults(state.searchResults!, settingsState.libraryViewMode)
+            : _buildCategoryContent(state.currentCategory!, settingsState.libraryViewMode);
 
-    return FutureBuilder<List<Widget>>(
-      future: items,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-        if (snapshot.hasData && snapshot.data!.isEmpty) {
-          final focusRepository = context.read<FocusRepository>();
-          return Center(
-            child: Text(
-              focusRepository.librarySearchController.text.isNotEmpty
-                  ? 'אין תוצאות עבור "${focusRepository.librarySearchController.text}"'
-                  : 'אין פריטים להצגה בתיקייה זו',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-          );
-        }
-        return ListView.builder(
-          shrinkWrap: true,
-          key: PageStorageKey(state.currentCategory),
-          itemCount: snapshot.data!.length,
-          itemBuilder: (context, index) => snapshot.data![index],
+        return FutureBuilder<List<Widget>>(
+          future: items,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
+            if (snapshot.hasData && snapshot.data!.isEmpty) {
+              final focusRepository = context.read<FocusRepository>();
+              return Center(
+                child: Text(
+                  focusRepository.librarySearchController.text.isNotEmpty
+                      ? 'אין תוצאות עבור "${focusRepository.librarySearchController.text}"'
+                      : 'אין פריטים להצגה בתיקייה זו',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              );
+            }
+
+            // בחירה בין תצוגת רשת לתצוגת רשימה
+            if (settingsState.libraryViewMode == LibraryViewMode.list) {
+              return Row(
+                children: [
+                  // רשימת הספרים - שליש מהמסך
+                  Expanded(
+                    flex: 1,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          left: BorderSide(
+                            color: Theme.of(context).dividerColor,
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      child: ListView.builder(
+                        itemCount: snapshot.data!.length,
+                        itemBuilder: (context, index) => snapshot.data![index],
+                      ),
+                    ),
+                  ),
+                  // פרטי הספר - שני שליש מהמסך
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      child: BookDetailsPanel(
+                        selectedBook: _selectedBook,
+                        onOpenBook: (book) => _openBook(book),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            } else {
+              return ListView.builder(
+                shrinkWrap: true,
+                key: PageStorageKey(state.currentCategory),
+                itemCount: snapshot.data!.length,
+                itemBuilder: (context, index) => snapshot.data![index],
+              );
+            }
+          },
         );
       },
     );
   }
 
-  Future<List<Widget>> _buildSearchResults(List<Book> books) async {
-    return [
-      Column(
-        children: [
-          MyGridView(
-            items: Future.value(
-              books
-                  .take(100)
-                  .map((book) => _buildBookItem(book, showTopics: true))
-                  .toList(),
+  Future<List<Widget>> _buildSearchResults(List<Book> books, LibraryViewMode viewMode) async {
+    if (viewMode == LibraryViewMode.list) {
+      return books
+          .take(100)
+          .map((book) => _buildBookListItem(book, showTopics: true))
+          .toList();
+    } else {
+      return [
+        Column(
+          children: [
+            MyGridView(
+              items: Future.value(
+                books
+                    .take(100)
+                    .map((book) => _buildBookItem(book, showTopics: true))
+                    .toList(),
+              ),
             ),
-          ),
-        ],
-      ),
-    ];
+          ],
+        ),
+      ];
+    }
   }
 
-  Future<List<Widget>> _buildCategoryContent(Category category) async {
+  Future<List<Widget>> _buildCategoryContent(Category category, LibraryViewMode viewMode) async {
     List<Widget> items = [];
 
     category.books.sort((a, b) => a.order.compareTo(b.order));
     category.subCategories.sort((a, b) => a.order.compareTo(b.order));
 
-    if (_depth != 0) {
-      // Add books
-      items.add(
-        MyGridView(
-          items: Future.value(
-            category.books.map((book) => _buildBookItem(book)).toList(),
+    if (viewMode == LibraryViewMode.list) {
+      // תצוגת רשימה
+      if (_depth != 0) {
+        // Add books
+        items.addAll(category.books.map((book) => _buildBookListItem(book)));
+
+        // Add subcategories
+        for (Category subCategory in category.subCategories) {
+          subCategory.books.sort((a, b) => a.order.compareTo(b.order));
+          subCategory.subCategories.sort((a, b) => a.order.compareTo(b.order));
+
+          items.add(HeaderItem(category: subCategory));
+          items.addAll([
+            ...subCategory.books.map((book) => _buildBookListItem(book)),
+            ...subCategory.subCategories.map(
+              (cat) => CategoryListItem(
+                category: cat,
+                onCategoryClickCallback: () => _openCategory(cat),
+              ),
+            ),
+          ]);
+        }
+      } else {
+        items.addAll([
+          ...category.books.map((book) => _buildBookListItem(book)),
+          ...category.subCategories.map(
+            (cat) => CategoryListItem(
+              category: cat,
+              onCategoryClickCallback: () => _openCategory(cat),
+            ),
           ),
-        ),
-      );
+        ]);
+      }
+    } else {
+      // תצוגת רשת (הקוד הקיים)
+      if (_depth != 0) {
+        // Add books
+        items.add(
+          MyGridView(
+            items: Future.value(
+              category.books.map((book) => _buildBookItem(book)).toList(),
+            ),
+          ),
+        );
 
-      // Add subcategories
-      for (Category subCategory in category.subCategories) {
-        subCategory.books.sort((a, b) => a.order.compareTo(b.order));
-        subCategory.subCategories.sort((a, b) => a.order.compareTo(b.order));
+        // Add subcategories
+        for (Category subCategory in category.subCategories) {
+          subCategory.books.sort((a, b) => a.order.compareTo(b.order));
+          subCategory.subCategories.sort((a, b) => a.order.compareTo(b.order));
 
-        items.add(Center(child: HeaderItem(category: subCategory)));
+          items.add(Center(child: HeaderItem(category: subCategory)));
+          items.add(
+            MyGridView(
+              items: Future.value([
+                ...subCategory.books.map((book) => _buildBookItem(book)),
+                ...subCategory.subCategories.map(
+                  (cat) => CategoryGridItem(
+                    category: cat,
+                    onCategoryClickCallback: () => _openCategory(cat),
+                  ),
+                ),
+              ]),
+            ),
+          );
+        }
+      } else {
         items.add(
           MyGridView(
             items: Future.value([
-              ...subCategory.books.map((book) => _buildBookItem(book)),
-              ...subCategory.subCategories.map(
+              ...category.books.map((book) => _buildBookItem(book)),
+              ...category.subCategories.map(
                 (cat) => CategoryGridItem(
                   category: cat,
                   onCategoryClickCallback: () => _openCategory(cat),
@@ -349,20 +480,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           ),
         );
       }
-    } else {
-      items.add(
-        MyGridView(
-          items: Future.value([
-            ...category.books.map((book) => _buildBookItem(book)),
-            ...category.subCategories.map(
-              (cat) => CategoryGridItem(
-                category: cat,
-                onCategoryClickCallback: () => _openCategory(cat),
-              ),
-            ),
-          ]),
-        ),
-      );
     }
 
     return items;
@@ -381,6 +498,32 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       book: book,
       showTopics: showTopics,
       onBookClickCallback: () => _openBook(book),
+    );
+  }
+
+  Widget _buildBookListItem(Book book, {bool showTopics = false}) {
+    if (book is ExternalBook) {
+      return BookListItem(
+        book: book,
+        onBookClickCallback: () => _openOtzarBook(book),
+        showTopics: showTopics,
+        onBookSelected: (selectedBook) {
+          setState(() {
+            _selectedBook = selectedBook;
+          });
+        },
+      );
+    }
+
+    return BookListItem(
+      book: book,
+      showTopics: showTopics,
+      onBookClickCallback: () => _openBook(book),
+      onBookSelected: (selectedBook) {
+        setState(() {
+          _selectedBook = selectedBook;
+        });
+      },
     );
   }
 

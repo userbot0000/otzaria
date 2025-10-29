@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/utils/color_utils.dart';
 import 'package:otzaria/utils/settings_wrapper.dart';
+import 'package:otzaria/settings/settings_state.dart';
 
 class SettingsRepository {
   static const String keyDarkMode = 'key-dark-mode';
@@ -28,6 +29,7 @@ class SettingsRepository {
   static const String keyCopyHeaderFormat = 'key-copy-header-format';
   static const String keyEnableAutoLinks = 'key-enable-auto-links';
   static const String keyFileLinksOnly = 'key-file-links-only';
+  static const String keyLibraryViewMode = 'key-library-view-mode';
 
   final SettingsWrapper _settings;
 
@@ -126,6 +128,10 @@ class SettingsRepository {
         keyFileLinksOnly,
         defaultValue: false,
       ),
+      'libraryViewMode': LibraryViewMode.values[_settings.getValue<int>(
+        keyLibraryViewMode,
+        defaultValue: LibraryViewMode.grid.index,
+      )],
     };
   }
 
@@ -229,6 +235,10 @@ class SettingsRepository {
     await _settings.setValue(keyFileLinksOnly, value);
   }
 
+  Future<void> updateLibraryViewMode(LibraryViewMode value) async {
+    await _settings.setValue(keyLibraryViewMode, value.index);
+  }
+
   /// Initialize default settings to disk if this is the first app launch
   Future<void> _initializeDefaultsIfNeeded() async {
     if (await _checkIfDefaultsNeeded()) {
@@ -270,6 +280,7 @@ class SettingsRepository {
     await _settings.setValue(keyCopyHeaderFormat, 'same_line_after_brackets');
     await _settings.setValue(keyEnableAutoLinks, true);
     await _settings.setValue(keyFileLinksOnly, false);
+    await _settings.setValue(keyLibraryViewMode, LibraryViewMode.grid.index);
 
     // Mark as initialized
     await _settings.setValue('settings_initialized', true);

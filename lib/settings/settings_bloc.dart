@@ -32,6 +32,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateCopyHeaderFormat>(_onUpdateCopyHeaderFormat);
     on<UpdateEnableAutoLinks>(_onUpdateEnableAutoLinks);
     on<UpdateFileLinksOnly>(_onUpdateFileLinksOnly);
+    on<UpdateLibraryViewMode>(_onUpdateLibraryViewMode);
   }
 
   Future<void> _onLoadSettings(
@@ -62,6 +63,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       copyHeaderFormat: settings['copyHeaderFormat'],
       enableAutoLinks: settings['enableAutoLinks'],
       fileLinksOnly: settings['fileLinksOnly'],
+      libraryViewMode: settings['libraryViewMode'],
     ));
   }
 
@@ -239,5 +241,13 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   ) async {
     await _repository.updateFileLinksOnly(event.fileLinksOnly);
     emit(state.copyWith(fileLinksOnly: event.fileLinksOnly));
+  }
+
+  Future<void> _onUpdateLibraryViewMode(
+    UpdateLibraryViewMode event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _repository.updateLibraryViewMode(event.libraryViewMode);
+    emit(state.copyWith(libraryViewMode: event.libraryViewMode));
   }
 }
