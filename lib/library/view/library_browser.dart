@@ -44,6 +44,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   int _depth = 0;
   Book? _selectedBook;
+  Set<String> _expandedCategories = {};
   @override
   void initState() {
     super.initState();
@@ -414,37 +415,48 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     category.subCategories.sort((a, b) => a.order.compareTo(b.order));
 
     if (viewMode == LibraryViewMode.list) {
-      // תצוגת רשימה
-      if (_depth != 0) {
-        // Add books
-        items.addAll(category.books.map((book) => _buildBookListItem(book)));
-
-        // Add subcategories
-        for (Category subCategory in category.subCategories) {
+      // תצוגת רשימה עם תיקיות מתרחבות
+      items.addAll(category.books.map((book) => _buildBookListItem(book)));
+      
+      // הוספת תיקיות משנה עם אפשרות הרחבה
+      for (Category subCategory in category.subCategories) {
+        final isExpanded = _expandedCategories.contains(subCategory.title);
+        
+        items.add(CategoryListItem(
+          category: subCategory,
+          isExpanded: isExpanded,
+          onToggleExpanded: () {
+            setState(() {
+              if (isExpanded) {
+                _expandedCategories.remove(subCategory.title);
+              } else {
+                _expandedCategories.add(subCategory.title);
+              }
+            });
+          },
+          onCategoryClickCallback: () => _openCategory(subCategory),
+        ));
+        
+        // אם התיקיה מורחבת, הוסף את התוכן שלה
+        if (isExpanded) {
           subCategory.books.sort((a, b) => a.order.compareTo(b.order));
           subCategory.subCategories.sort((a, b) => a.order.compareTo(b.order));
-
-          items.add(HeaderItem(category: subCategory));
-          items.addAll([
-            ...subCategory.books.map((book) => _buildBookListItem(book)),
-            ...subCategory.subCategories.map(
-              (cat) => CategoryListItem(
-                category: cat,
-                onCategoryClickCallback: () => _openCategory(cat),
-              ),
-            ),
-          ]);
-        }
-      } else {
-        items.addAll([
-          ...category.books.map((book) => _buildBookListItem(book)),
-          ...category.subCategories.map(
-            (cat) => CategoryListItem(
+          
+          // הוספת ספרים עם הזחה
+          items.addAll(subCategory.books.map((book) => Padding(
+            padding: const EdgeInsets.only(right: 24),
+            child: _buildBookListItem(book),
+          )));
+          
+          // הוספת תיקיות משנה עם הזחה
+          items.addAll(subCategory.subCategories.map((cat) => Padding(
+            padding: const EdgeInsets.only(right: 24),
+            child: CategoryListItem(
               category: cat,
               onCategoryClickCallback: () => _openCategory(cat),
             ),
-          ),
-        ]);
+          )));
+        }
       }
     } else {
       // תצוגת רשת (הקוד הקיים)
@@ -678,6 +690,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   void _resetSelectedBook() {
     setState(() {
       _selectedBook = null;
+      _expandedCategories.clear(); // איפוס תיקיות מורחבות
     });
   }
 
