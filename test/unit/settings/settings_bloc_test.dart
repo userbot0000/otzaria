@@ -49,6 +49,7 @@ void main() {
         'copyHeaderFormat': 'same_line_after_brackets',
         'enableAutoLinks': true,
         'fileLinksOnly': false,
+        'libraryViewMode': LibraryViewMode.grid,
       };
 
       blocTest<SettingsBloc, SettingsState>(
@@ -84,6 +85,7 @@ void main() {
             copyHeaderFormat: mockSettings['copyHeaderFormat'] as String,
             enableAutoLinks: mockSettings['enableAutoLinks'] as bool,
             fileLinksOnly: mockSettings['fileLinksOnly'] as bool,
+            libraryViewMode: mockSettings['libraryViewMode'] as LibraryViewMode,
           ),
         ],
         verify: (_) {

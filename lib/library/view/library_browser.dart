@@ -323,6 +323,18 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
             // בחירה בין תצוגת רשת לתצוגת רשימה
             if (settingsState.libraryViewMode == LibraryViewMode.list) {
+              // אם אין ספר נבחר, בחר את הראשון ברשימה
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_selectedBook == null && snapshot.data!.isNotEmpty) {
+                  final firstBook = _getFirstBookFromItems(snapshot.data!);
+                  if (firstBook != null) {
+                    setState(() {
+                      _selectedBook = firstBook;
+                    });
+                  }
+                }
+              });
+
               return Row(
                 children: [
                   // רשימת הספרים - שליש מהמסך
@@ -343,15 +355,16 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                       ),
                     ),
                   ),
-                  // פרטי הספר - שני שליש מהמסך
+                  // תצוגת הספר - שני שליש מהמסך
                   Expanded(
                     flex: 2,
                     child: Container(
-                      padding: const EdgeInsets.all(16),
-                      child: BookDetailsPanel(
-                        selectedBook: _selectedBook,
-                        onOpenBook: (book) => _openBook(book),
-                      ),
+                      child: _selectedBook != null
+                          ? BookViewerPanel(
+                              book: _selectedBook!,
+                              onOpenBook: () => _openBook(_selectedBook!),
+                            )
+                          : const BookPlaceholderPanel(),
                     ),
                   ),
                 ],
@@ -534,6 +547,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   void _openCategory(Category category) {
     setState(() => _depth++);
+    _resetSelectedBook();
     context.read<LibraryBloc>().add(NavigateToCategory(category));
     _refocusSearchBar();
   }
@@ -650,6 +664,21 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   void _refocusSearchBar({bool selectAll = false}) {
     final focusRepository = context.read<FocusRepository>();
     focusRepository.requestLibrarySearchFocus(selectAll: selectAll);
+  }
+
+  Book? _getFirstBookFromItems(List<Widget> items) {
+    for (final item in items) {
+      if (item is BookListItem) {
+        return item.book;
+      }
+    }
+    return null;
+  }
+
+  void _resetSelectedBook() {
+    setState(() {
+      _selectedBook = null;
+    });
   }
 
   void _showHistoryDialog(BuildContext context) {

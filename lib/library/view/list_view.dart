@@ -51,7 +51,7 @@ class LibraryListView extends StatelessWidget {
                 flex: 2,
                 child: Container(
                   padding: const EdgeInsets.all(16),
-                  child: const BookDetailsPanel(),
+                  child: const BookPlaceholderPanel(),
                 ),
               ),
             ],
@@ -187,105 +187,132 @@ class CategoryListItem extends StatelessWidget {
   }
 }
 
-class BookDetailsPanel extends StatelessWidget {
-  final Book? selectedBook;
-  final Function(Book)? onOpenBook;
+class BookViewerPanel extends StatelessWidget {
+  final Book book;
+  final VoidCallback? onOpenBook;
 
-  const BookDetailsPanel({
+  const BookViewerPanel({
     super.key,
-    this.selectedBook,
+    required this.book,
     this.onOpenBook,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (selectedBook == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.book,
-              size: 64,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'בחר ספר כדי לראות פרטים',
-              style: TextStyle(
-                fontSize: 18,
-                color: Theme.of(context).colorScheme.outline,
-              ),
-            ),
-          ],
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: Theme.of(context).dividerColor,
+          width: 1,
         ),
-      );
-    }
-
-    return SingleChildScrollView(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      margin: const EdgeInsets.all(8),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // כותרת הספר
-          Text(
-            selectedBook!.title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 16),
-
-          // מחבר
-          if (selectedBook!.author != null && selectedBook!.author!.isNotEmpty)
-            _buildDetailRow(context, 'מחבר:', selectedBook!.author!),
-
-          // תאריך פרסום
-          if (selectedBook!.pubDate != null && selectedBook!.pubDate!.isNotEmpty)
-            _buildDetailRow(context, 'תאריך פרסום:', selectedBook!.pubDate!),
-
-          // נושאים
-          if (selectedBook!.topics.isNotEmpty)
-            _buildDetailRow(context, 'נושאים:', selectedBook!.topics),
-
-          // תיאור
-          if (selectedBook!.heShortDesc != null &&
-              selectedBook!.heShortDesc!.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text(
-              'תיאור:',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                selectedBook!.heShortDesc!,
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 24),
-
-          // כפתור פתיחה
-          SizedBox(
+          Container(
             width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                if (selectedBook != null && onOpenBook != null) {
-                  onOpenBook!(selectedBook!);
-                }
-              },
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('פתח ספר'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(8),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  book.title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                if (book.author != null && book.author!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    book.author!,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // תוכן הספר
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'תצוגה מקדימה של הספר',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      padding: const EdgeInsets.all(16),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // כאן נוסיף את תוכן הספר בעתיד
+                            Text(
+                              'כאן יוצג תוכן הספר "${book.title}"',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            if (book.heShortDesc != null && book.heShortDesc!.isNotEmpty) ...[
+                              Text(
+                                'תיאור הספר:',
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                book.heShortDesc!,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // כפתור פתיחה מלאה
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: onOpenBook,
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('פתח במסך עיון'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -293,27 +320,30 @@ class BookDetailsPanel extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildDetailRow(BuildContext context, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+class BookPlaceholderPanel extends StatelessWidget {
+  const BookPlaceholderPanel({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
+          Icon(
+            Icons.book,
+            size: 64,
+            color: Theme.of(context).colorScheme.outline,
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 14),
+          const SizedBox(height: 16),
+          Text(
+            'בחר ספר מהרשימה כדי לראות תצוגה מקדימה',
+            style: TextStyle(
+              fontSize: 18,
+              color: Theme.of(context).colorScheme.outline,
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
